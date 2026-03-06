@@ -281,6 +281,9 @@ Values fromELFRelocation(model::Architecture::Values Architecture,
       return Invalid;
     }
 
+  case model::Architecture::hexagon:
+    return Invalid;
+
   default:
     revng_abort();
   }
@@ -370,6 +373,9 @@ bool isELFRelocationBaseRelative(model::Architecture::Values Architecture,
       return Invalid;
     }
 
+  case model::Architecture::hexagon:
+    return Invalid;
+
   default:
     revng_abort();
   }
@@ -381,6 +387,7 @@ Values formCOFFRelocation(model::Architecture::Values Architecture) {
   case model::Architecture::arm:
   case model::Architecture::mips:
   case model::Architecture::mipsel:
+  case model::Architecture::hexagon:
     return WriteAbsoluteAddress32;
 
   case model::Architecture::x86_64:
@@ -448,6 +455,9 @@ llvm::StringRef model::Architecture::getPCCSVName(Values V) {
   case model::Architecture::mips:
   case model::Architecture::mipsel:
     return "_PC";
+
+  case model::Architecture::hexagon:
+    return "_pc";
 
   default:
     revng_abort();

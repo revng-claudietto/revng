@@ -892,6 +892,7 @@ getMinimumPCAlignment(model::Architecture::Values Architecture) {
   case model::Architecture::mips:
   case model::Architecture::mipsel:
   case model::Architecture::aarch64:
+  case model::Architecture::hexagon:
     return 4;
   default:
     revng_abort();
@@ -913,6 +914,7 @@ PCH::create(model::Architecture::Values Architecture,
   case model::Architecture::mipsel:
   case model::Architecture::aarch64:
   case model::Architecture::systemz:
+  case model::Architecture::hexagon:
   case model::Architecture::x86:
     return PCOnlyProgramCounterHandler::create(M, Factory, Alignment);
 
@@ -936,6 +938,7 @@ PCH::fromModule(model::Architecture::Values Architecture, Module *M) {
   case model::Architecture::mipsel:
   case model::Architecture::aarch64:
   case model::Architecture::systemz:
+  case model::Architecture::hexagon:
   case model::Architecture::x86:
     return PCOnlyProgramCounterHandler::fromModule(Architecture, M, Alignment);
 

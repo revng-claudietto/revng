@@ -181,6 +181,7 @@ foreach(
   ARCH
   aarch64
   arm
+  hexagon
   mips
   mipsel
   x86_64

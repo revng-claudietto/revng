@@ -58,6 +58,7 @@ public:
       return Address() + 4; // Two instructions later
     case MetaAddressType::Code_aarch64:
     case MetaAddressType::Code_systemz:
+    case MetaAddressType::Code_hexagon:
     case MetaAddressType::Code_mips:
     case MetaAddressType::Code_mipsel:
       return Address();

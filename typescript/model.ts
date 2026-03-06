@@ -16,6 +16,7 @@ const metaAddressTypes = [
     "Code_arm_thumb",
     "Code_aarch64",
     "Code_systemz",
+    "Code_hexagon",
 ] as const;
 type MetaAddressType = (typeof metaAddressTypes)[number];
 
@@ -29,6 +30,7 @@ function maxValue(type: MetaAddressType) {
         case "Code_mips":
         case "Code_mipsel":
         case "Code_arm":
+        case "Code_hexagon":
             return 2n ** 32n;
         case "Generic64":
         case "Code_x86_64":

@@ -1078,6 +1078,7 @@ definitions:
       - name: mips
       - name: mipsel
       - name: systemz
+      - name: hexagon
 
   - name: ABI
     type: enum
@@ -1231,6 +1232,10 @@ definitions:
         doc: |-
           The s390x ABI for SystemZ processor architecture
           ([reference](https://github.com/IBM/s390x-abi)).
+
+      - name: Hexagon_linux
+        doc: |-
+          The ABI for Qualcomm Hexagon DSP processor architecture.
 
   - name: CanonicalRegisterValue
     type: struct
@@ -1458,6 +1463,39 @@ definitions:
       - name: f29_mips
       - name: f30_mips
       - name: f31_mips
+      # Hexagon registers
+      - name: r0_hexagon
+      - name: r1_hexagon
+      - name: r2_hexagon
+      - name: r3_hexagon
+      - name: r4_hexagon
+      - name: r5_hexagon
+      - name: r6_hexagon
+      - name: r7_hexagon
+      - name: r8_hexagon
+      - name: r9_hexagon
+      - name: r10_hexagon
+      - name: r11_hexagon
+      - name: r12_hexagon
+      - name: r13_hexagon
+      - name: r14_hexagon
+      - name: r15_hexagon
+      - name: r16_hexagon
+      - name: r17_hexagon
+      - name: r18_hexagon
+      - name: r19_hexagon
+      - name: r20_hexagon
+      - name: r21_hexagon
+      - name: r22_hexagon
+      - name: r23_hexagon
+      - name: r24_hexagon
+      - name: r25_hexagon
+      - name: r26_hexagon
+      - name: r27_hexagon
+      - name: r28_hexagon
+      - name: r29_hexagon
+      - name: r30_hexagon
+      - name: r31_hexagon
       # SystemZ registers
       - name: r0_systemz
       - name: r1_systemz

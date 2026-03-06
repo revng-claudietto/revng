@@ -243,7 +243,14 @@ void DetectStackSize::collectStackBounds(Function &F) {
 
   if (NeedsStackFrame) {
     if (LowerBound.hasValue()) {
+      const APInt &LB = LowerBound.value();
       int64_t Size = -LowerBound.value().getLimitedValue();
+      revng_log(Log,
+                "LowerBound APInt bitWidth=" << LB.getBitWidth()
+                  << " isNegative=" << LB.isNegative()
+                  << " sext=" << LB.sext(64).getSExtValue()
+                  << " getLimitedValue=" << LB.getLimitedValue()
+                  << " Size(negated)=" << Size);
       if (Size > 0)
         FSI.MaxStackSize = Size;
     }

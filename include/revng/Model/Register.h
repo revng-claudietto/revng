@@ -156,6 +156,39 @@ getReferenceArchitecture(Values V) {
   case v30_aarch64:
   case v31_aarch64:
     return model::Architecture::aarch64;
+  case r0_hexagon:
+  case r1_hexagon:
+  case r2_hexagon:
+  case r3_hexagon:
+  case r4_hexagon:
+  case r5_hexagon:
+  case r6_hexagon:
+  case r7_hexagon:
+  case r8_hexagon:
+  case r9_hexagon:
+  case r10_hexagon:
+  case r11_hexagon:
+  case r12_hexagon:
+  case r13_hexagon:
+  case r14_hexagon:
+  case r15_hexagon:
+  case r16_hexagon:
+  case r17_hexagon:
+  case r18_hexagon:
+  case r19_hexagon:
+  case r20_hexagon:
+  case r21_hexagon:
+  case r22_hexagon:
+  case r23_hexagon:
+  case r24_hexagon:
+  case r25_hexagon:
+  case r26_hexagon:
+  case r27_hexagon:
+  case r28_hexagon:
+  case r29_hexagon:
+  case r30_hexagon:
+  case r31_hexagon:
+    return model::Architecture::hexagon;
   case v0_mips:
   case v1_mips:
   case a0_mips:
@@ -331,6 +364,7 @@ inline uint64_t getSize(Values V) {
   case model::Architecture::x86:
   case model::Architecture::arm:
   case model::Architecture::mips:
+  case model::Architecture::hexagon:
     return 4;
   case model::Architecture::x86_64:
   case model::Architecture::aarch64:
@@ -357,6 +391,8 @@ constexpr model::Register::Values getFirst() {
     return model::Register::x0_aarch64;
   else if constexpr (Architecture == model::Architecture::systemz)
     return model::Register::r0_systemz;
+  else if constexpr (Architecture == model::Architecture::hexagon)
+    return model::Register::r0_hexagon;
   else
     static_assert(value_always_false<Architecture>::value,
                   "Unsupported architecture");
@@ -378,6 +414,8 @@ constexpr model::Register::Values getLast() {
     return model::Register::v31_aarch64;
   else if constexpr (Architecture == model::Architecture::systemz)
     return model::Register::f15_systemz;
+  else if constexpr (Architecture == model::Architecture::hexagon)
+    return model::Register::r31_hexagon;
   else
     static_assert(value_always_false<Architecture>::value,
                   "Unsupported architecture");
@@ -577,6 +615,38 @@ constexpr inline model::PrimitiveKind::Values primitiveKind(Values V) {
   case sp_mips:
   case fp_mips:
   case ra_mips:
+  case r0_hexagon:
+  case r1_hexagon:
+  case r2_hexagon:
+  case r3_hexagon:
+  case r4_hexagon:
+  case r5_hexagon:
+  case r6_hexagon:
+  case r7_hexagon:
+  case r8_hexagon:
+  case r9_hexagon:
+  case r10_hexagon:
+  case r11_hexagon:
+  case r12_hexagon:
+  case r13_hexagon:
+  case r14_hexagon:
+  case r15_hexagon:
+  case r16_hexagon:
+  case r17_hexagon:
+  case r18_hexagon:
+  case r19_hexagon:
+  case r20_hexagon:
+  case r21_hexagon:
+  case r22_hexagon:
+  case r23_hexagon:
+  case r24_hexagon:
+  case r25_hexagon:
+  case r26_hexagon:
+  case r27_hexagon:
+  case r28_hexagon:
+  case r29_hexagon:
+  case r30_hexagon:
+  case r31_hexagon:
   case r0_systemz:
   case r1_systemz:
   case r2_systemz:
@@ -745,6 +815,9 @@ constexpr inline model::Register::Values getStackPointer(Values V) {
   case systemz:
     return r15_systemz;
 
+  case hexagon:
+    return r29_hexagon;
+
   default:
     revng_abort();
   }
@@ -773,6 +846,9 @@ constexpr inline model::Register::Values getSyscallNumberRegister(Values V) {
   case systemz:
     return r1_systemz;
 
+  case hexagon:
+    return r6_hexagon;
+
   default:
     revng_abort();
   }
@@ -798,6 +874,9 @@ constexpr inline model::Register::Values getReturnAddressRegister(Values V) {
 
   case systemz:
     return r14_systemz;
+
+  case hexagon:
+    return r31_hexagon;
 
   default:
     revng_abort();
@@ -851,6 +930,8 @@ inline cppcoro::generator<model::Register::Values> allRegisters() {
   for (model::Register::Values Register : registers(mipsel))
     co_yield Register;
   for (model::Register::Values Register : registers(systemz))
+    co_yield Register;
+  for (model::Register::Values Register : registers(hexagon))
     co_yield Register;
 }
 

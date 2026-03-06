@@ -17,6 +17,7 @@ inline bool isLittleEndian(Values V) {
   case model::Architecture::arm:
   case model::Architecture::aarch64:
   case model::Architecture::mipsel:
+  case model::Architecture::hexagon:
     return true;
   case model::Architecture::mips:
   case model::Architecture::systemz:
@@ -42,6 +43,8 @@ inline Values fromLLVMArchitecture(llvm::Triple::ArchType A) {
     return model::Architecture::mipsel;
   case llvm::Triple::systemz:
     return model::Architecture::systemz;
+  case llvm::Triple::hexagon:
+    return model::Architecture::hexagon;
   default:
     return model::Architecture::Invalid;
   }
@@ -63,6 +66,8 @@ inline llvm::Triple::ArchType toLLVMArchitecture(Values V) {
     return llvm::Triple::mipsel;
   case model::Architecture::systemz:
     return llvm::Triple::systemz;
+  case model::Architecture::hexagon:
+    return llvm::Triple::hexagon;
   default:
     revng_abort();
   }
@@ -75,6 +80,7 @@ constexpr inline uint64_t getPointerSize(Values V) {
   case model::Architecture::arm:
   case model::Architecture::mips:
   case model::Architecture::mipsel:
+  case model::Architecture::hexagon:
     return 4;
   case model::Architecture::x86_64:
   case model::Architecture::aarch64:
@@ -98,6 +104,7 @@ constexpr inline uint64_t getCallPushSize(Values V) {
   case mipsel:
   case aarch64:
   case systemz:
+  case hexagon:
     return 0;
 
   default:
@@ -131,6 +138,10 @@ constexpr inline llvm::ArrayRef<char> getBasicBlockEndingPattern(Values V) {
     // TODO
     return "";
 
+  case hexagon:
+    // jumpr r31 (return)
+    return "\x00\xc0\x9f\x52";
+
   default:
     revng_abort();
   }
@@ -155,6 +166,8 @@ constexpr inline llvm::StringRef getSyscallHelper(Values V) {
 
   case systemz:
     return "helper_exception";
+  case hexagon:
+    return "helper_raise_exception";
   default:
     revng_abort();
   }
@@ -218,6 +231,15 @@ inline llvm::ArrayRef<uint64_t> getNoReturnSyscallNumbers(Values V) {
     return NoReturnSyscalls;
   }
 
+  case hexagon: {
+    static uint64_t NoReturnSyscalls[] = {
+      94, // exit_group
+      93, // exit
+      221 // execve
+    };
+    return NoReturnSyscalls;
+  }
+
   default:
     revng_abort();
   }
@@ -234,6 +256,7 @@ inline bool hasELFRelocationAddend(Values V) {
   case model::Architecture::aarch64:
   case model::Architecture::mips:
   case model::Architecture::mipsel:
+  case model::Architecture::hexagon:
     return false;
 
   default:
@@ -252,6 +275,7 @@ inline llvm::StringRef getReadRegisterAssembly(Values V) {
   case model::Architecture::aarch64:
   case model::Architecture::mips:
   case model::Architecture::mipsel:
+  case model::Architecture::hexagon:
     return "";
 
   default:
@@ -270,6 +294,7 @@ inline llvm::StringRef getWriteRegisterAssembly(Values V) {
   case model::Architecture::aarch64:
   case model::Architecture::mips:
   case model::Architecture::mipsel:
+  case model::Architecture::hexagon:
     return "";
 
   default:
@@ -288,6 +313,7 @@ inline llvm::StringRef getJumpAssembly(Values V) {
   case model::Architecture::aarch64:
   case model::Architecture::mips:
   case model::Architecture::mipsel:
+  case model::Architecture::hexagon:
     return "";
 
   default:
@@ -313,6 +339,8 @@ inline llvm::StringRef getQEMUName(Values V) {
     return "mips";
   case model::Architecture::mipsel:
     return "mipsel";
+  case model::Architecture::hexagon:
+    return "hexagon";
   default:
     revng_abort();
   }
@@ -333,6 +361,8 @@ inline Values fromQEMUName(llvm::StringRef Name) {
     return model::Architecture::mips;
   else if (Name == "mipsel")
     return model::Architecture::mipsel;
+  else if (Name == "hexagon")
+    return model::Architecture::hexagon;
   else
     revng_abort();
 }
@@ -350,6 +380,7 @@ inline unsigned getMinimalFinalStackOffset(Values V) {
   case model::Architecture::aarch64:
   case model::Architecture::mips:
   case model::Architecture::mipsel:
+  case model::Architecture::hexagon:
     return 0;
 
   default:
@@ -369,6 +400,8 @@ inline constexpr llvm::StringRef getAssemblyCommentIndicator(Values V) {
     return "@";
   case model::Architecture::aarch64:
     return "//";
+  case model::Architecture::hexagon:
+    return "//";
   default:
     revng_abort();
   }
@@ -383,6 +416,7 @@ inline constexpr llvm::StringRef getAssemblyLabelIndicator(Values V) {
   case model::Architecture::mips:
   case model::Architecture::mipsel:
   case model::Architecture::systemz:
+  case model::Architecture::hexagon:
     return ":";
   default:
     revng_abort();
@@ -396,6 +430,7 @@ inline constexpr bool hasDelaySlot(Values V) {
   case model::Architecture::arm:
   case model::Architecture::aarch64:
   case model::Architecture::systemz:
+  case model::Architecture::hexagon:
     return false;
   case model::Architecture::mips:
   case model::Architecture::mipsel:

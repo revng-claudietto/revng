@@ -202,7 +202,8 @@ static void convertFunctionsToCABI(TupleTree<model::Binary> &Model,
       model::ABI::Microsoft_x86_thiscall,
       model::ABI::Microsoft_x86_vectorcall,
       model::ABI::AAPCS,
-      model::ABI::AAPCS64
+      model::ABI::AAPCS64,
+      model::ABI::Hexagon_linux
 
       // There are known issues
       // model::ABI::SystemV_MIPS_o32,

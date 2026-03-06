@@ -22,6 +22,7 @@ class MetaAddressType(Enum):
     Code_arm_thumb = "Code_arm_thumb"
     Code_aarch64 = "Code_aarch64"
     Code_systemz = "Code_systemz"
+    Code_hexagon = "Code_hexagon"
 
     @classmethod
     def yaml_representer(cls, dumper: yaml.dumper.Dumper, instance: Enum):

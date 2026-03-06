@@ -48,6 +48,9 @@ getArchitecture(model::ABI::Values V) {
   case model::ABI::SystemZ_s390x:
     return model::Architecture::systemz;
 
+  case model::ABI::Hexagon_linux:
+    return model::Architecture::hexagon;
+
   case model::ABI::Count:
   case model::ABI::Invalid:
   default:
@@ -90,6 +93,8 @@ getDefaultForELF(model::Architecture::Values V) {
     return model::ABI::SystemV_MIPSEL_o32;
   case model::Architecture::systemz:
     return model::ABI::SystemZ_s390x;
+  case model::Architecture::hexagon:
+    return model::ABI::Hexagon_linux;
   default:
     return std::nullopt;
   }
@@ -195,6 +200,9 @@ inline constexpr llvm::StringRef getDescription(model::ABI::Values V) {
 
   case model::ABI::SystemZ_s390x:
     return "The s390x SystemZ ABI";
+
+  case model::ABI::Hexagon_linux:
+    return "The Qualcomm Hexagon DSP ABI";
 
   case model::ABI::Count:
   case model::ABI::Invalid:

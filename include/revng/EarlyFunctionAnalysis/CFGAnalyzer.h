@@ -122,7 +122,7 @@ private:
 
   void materializePCValues(llvm::Function *F, revng::IRBuilder &);
 
-  void runOptimizationPipeline(llvm::Function *F);
+  void runOptimizationPipeline(llvm::Function *F, llvm::Function *IBIFn);
 
   FunctionSummary milkInfo(OutlinedFunction *F,
                            SortedVector<efa::BasicBlock> &&CFG);

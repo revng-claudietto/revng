@@ -1,0 +1,67 @@
+#
+# This file is distributed under the MIT License. See LICENSE.md for details.
+#
+
+ABI: Hexagon_linux
+
+ArgumentsArePositionBased: false
+OnlyStartDoubleArgumentsFromAnEvenRegister: true
+ArgumentsCanBeSplitBetweenRegistersAndStack: false
+BigArgumentsUsePointersToCopy: false
+NoRegisterArgumentsCanComeAfterStackOnes: false
+AllowPackedTypesInRegisters: false
+CalleeIsResponsibleForStackCleanup: false
+FloatsUseGPRs: true
+PackStackArguments: false
+TreatAllAggregatesAsPacked: false
+
+StackAlignment: 8
+MinimumStackArgumentSize: 4
+
+MaximumGPRsPerAggregateArgument: 2
+MaximumGPRsPerAggregateReturnValue: 2
+MaximumGPRsPerScalarArgument: 2
+MaximumGPRsPerScalarReturnValue: 2
+
+GeneralPurposeArgumentRegisters:
+  - r0_hexagon
+  - r1_hexagon
+  - r2_hexagon
+  - r3_hexagon
+  - r4_hexagon
+  - r5_hexagon
+GeneralPurposeReturnValueRegisters:
+  - r0_hexagon
+  - r1_hexagon
+VectorArgumentRegisters: []
+VectorReturnValueRegisters: []
+CalleeSavedRegisters:
+  - r16_hexagon
+  - r17_hexagon
+  - r18_hexagon
+  - r19_hexagon
+  - r20_hexagon
+  - r21_hexagon
+  - r22_hexagon
+  - r23_hexagon
+  - r24_hexagon
+  - r25_hexagon
+  - r26_hexagon
+  - r27_hexagon
+  - r28_hexagon
+  - r30_hexagon
+
+ReturnValueLocationRegister: r0_hexagon
+ReturnValueLocationIsReturned: true
+
+ScalarTypes:
+  - Size: 1
+  - Size: 2
+  - Size: 4
+  - Size: 8
+    AlignedAt: 4
+
+FloatingPointScalarTypes:
+  - Size: 4
+  - Size: 8
+    AlignedAt: 4

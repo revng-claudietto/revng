@@ -9,6 +9,8 @@
 #include "llvm/Analysis/BasicAliasAnalysis.h"
 #include "llvm/Analysis/ScopedNoAliasAA.h"
 #include "llvm/CodeGen/UnreachableBlockElim.h"
+#include "llvm/IR/Dominators.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/Passes/PassBuilder.h"
@@ -20,6 +22,8 @@
 #include "llvm/Transforms/Scalar/MergedLoadStoreMotion.h"
 #include "llvm/Transforms/Scalar/SROA.h"
 #include "llvm/Transforms/Scalar/SimplifyCFG.h"
+#include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Utils/Local.h"
 
 #include "revng/ADT/Queue.h"
 #include "revng/BasicAnalyses/RemoveHelperCalls.h"
@@ -590,7 +594,219 @@ void CFGAnalyzer::materializePCValues(llvm::Function *F,
   }
 }
 
-void CFGAnalyzer::runOptimizationPipeline(llvm::Function *F) {
+/// For each IBI call whose block has multiple predecessors and at least one
+/// phi argument, clone the block into each predecessor (up to MaxCopies).
+/// This turns phis into concrete values, allowing InstCombine to fold
+/// sub(x, x) -> 0 and reveal constant JumpsToReturnAddress / SPO.
+struct UntangleIBIBlocksPass
+  : public llvm::PassInfoMixin<UntangleIBIBlocksPass> {
+
+  llvm::Function *IBIFn;
+
+  UntangleIBIBlocksPass(llvm::Function *IBIFn) : IBIFn(IBIFn) {}
+
+  llvm::PreservedAnalyses run(llvm::Function &F,
+                              llvm::FunctionAnalysisManager &) {
+    using llvm::BasicBlock;
+    constexpr unsigned MaxCopies = 4;
+    bool Changed = false;
+
+    SmallVector<CallBase *, 4> IBICalls;
+    for (CallBase *CI : callers(IBIFn))
+      if (CI->getParent()->getParent() == &F)
+        IBICalls.push_back(CI);
+
+    for (CallBase *CI : IBICalls) {
+      BasicBlock *BB = CI->getParent();
+
+      if (BB->phis().empty())
+        continue;
+
+      SmallVector<BasicBlock *, 8> Preds(predecessors(BB));
+      if (Preds.size() <= 1 || Preds.size() > MaxCopies)
+        continue;
+
+      for (unsigned P = 0, PE = Preds.size() - 1; P < PE; ++P) {
+        BasicBlock *Pred = Preds[P];
+
+        ValueToValueMapTy VMap;
+        BasicBlock *Clone = CloneBasicBlock(BB, VMap,
+                                            ".untangled." + Pred->getName(),
+                                            &F);
+
+        for (Instruction &I : *Clone)
+          RemapInstruction(&I, VMap,
+                           RF_NoModuleLevelChanges | RF_IgnoreMissingLocals);
+
+        for (auto It = Clone->begin(); isa<PHINode>(&*It);) {
+          PHINode *PN = cast<PHINode>(&*It++);
+          Value *Incoming = PN->getIncomingValueForBlock(Pred);
+          PN->replaceAllUsesWith(Incoming);
+          PN->eraseFromParent();
+        }
+
+        Pred->getTerminator()->replaceUsesOfWith(BB, Clone);
+      }
+
+      BasicBlock *LastPred = Preds.back();
+      for (auto It = BB->begin(); isa<PHINode>(&*It);) {
+        PHINode *PN = cast<PHINode>(&*It++);
+        Value *Incoming = PN->getIncomingValueForBlock(LastPred);
+        PN->replaceAllUsesWith(Incoming);
+        PN->eraseFromParent();
+      }
+
+      Changed = true;
+    }
+
+    return Changed ? llvm::PreservedAnalyses::none()
+                   : llvm::PreservedAnalyses::all();
+  }
+};
+
+//===----------------------------------------------------------------------===//
+// PushThroughSelect — duplicate operations through select/phi
+//
+// For each speculatable instruction whose operands include select instructions
+// with the same condition (or phi nodes in the same block), duplicate the
+// instruction into each arm:
+//
+// Selects:
+//   %s1 = select i1 %c, %a, %b
+//   %s2 = select i1 %c, %d, %e
+//   %r  = add %s1, %s2
+// becomes:
+//   %r.t = add %a, %d
+//   %r.f = add %b, %e
+//   %r   = select i1 %c, %r.t, %r.f
+//
+// Phis:
+//   %p1 = phi [%a, %bb1], [%b, %bb2]
+//   %p2 = phi [%d, %bb1], [%e, %bb2]
+//   %r  = add %p1, %p2
+// becomes:
+//   bb1: %r.bb1 = add %a, %d
+//   bb2: %r.bb2 = add %b, %e
+//   %r  = phi [%r.bb1, %bb1], [%r.bb2, %bb2]
+//===----------------------------------------------------------------------===//
+
+/// Return true if \p I can safely be duplicated into both arms of a
+/// select or into predecessor blocks of a phi.
+static bool isSafeToClone(Instruction *I) {
+  if (isa<SelectInst>(I) || isa<PHINode>(I) || I->isTerminator())
+    return false;
+
+  // Calls: speculatable + no memory writes is sufficient.
+  if (auto *CB = dyn_cast<CallBase>(I))
+    return CB->hasFnAttr(Attribute::Speculatable) && CB->onlyReadsMemory();
+
+  // Everything else: reject stores, volatile loads, etc.
+  return !I->mayHaveSideEffects();
+}
+
+static bool tryPushThroughSelect(Instruction *User, Value *Cond) {
+  SmallVector<Value *, 4> TrueOps, FalseOps;
+
+  for (Use &Op : User->operands()) {
+    if (auto *Sel = dyn_cast<SelectInst>(Op.get())) {
+      if (Sel->getCondition() == Cond) {
+        TrueOps.push_back(Sel->getTrueValue());
+        FalseOps.push_back(Sel->getFalseValue());
+        continue;
+      }
+    }
+    TrueOps.push_back(Op.get());
+    FalseOps.push_back(Op.get());
+  }
+
+  Instruction *TrueClone = User->clone();
+  Instruction *FalseClone = User->clone();
+
+  for (unsigned I = 0, E = User->getNumOperands(); I != E; ++I) {
+    TrueClone->setOperand(I, TrueOps[I]);
+    FalseClone->setOperand(I, FalseOps[I]);
+  }
+
+  TrueClone->setName(User->getName() + ".t");
+  FalseClone->setName(User->getName() + ".f");
+  TrueClone->insertBefore(User);
+  FalseClone->insertBefore(User);
+
+  llvm::IRBuilder<> B(User);
+  Value *NewSel = B.CreateSelect(Cond, TrueClone, FalseClone,
+                                 User->getName() + ".pushed");
+
+  User->replaceAllUsesWith(NewSel);
+  User->eraseFromParent();
+  return true;
+}
+
+/// Try to push a single instruction through its select operand.
+/// Returns true if the instruction was transformed.
+static bool tryPushInstruction(Instruction *I) {
+  using namespace llvm;
+
+  if (!isSafeToClone(I))
+    return false;
+
+  // Check if any operand is a select with a common condition.
+  Value *SelCond = nullptr;
+  bool HasSelect = false;
+  for (Use &Op : I->operands()) {
+    if (auto *Sel = dyn_cast<SelectInst>(Op.get())) {
+      if (!SelCond) {
+        SelCond = Sel->getCondition();
+        HasSelect = true;
+      } else if (Sel->getCondition() != SelCond) {
+        HasSelect = false;
+        break;
+      } else {
+        HasSelect = true;
+      }
+    }
+  }
+
+  if (HasSelect && SelCond)
+    return tryPushThroughSelect(I, SelCond);
+
+  return false;
+}
+
+/// Push speculatable operations through select/phi instructions.
+static bool pushOperationsThroughSelects(llvm::Function &F) {
+  using namespace llvm;
+  bool Changed = false;
+  bool Progress;
+
+  do {
+    Progress = false;
+    for (auto &BB : F) {
+      for (auto It = BB.begin(), E = BB.end(); It != E;) {
+        Instruction *I = &*It++;
+        Progress |= tryPushInstruction(I);
+      }
+    }
+
+    if (Progress)
+      Changed = true;
+  } while (Progress);
+
+  return Changed;
+}
+
+namespace {
+struct PushThroughSelectPass : public PassInfoMixin<PushThroughSelectPass> {
+  llvm::PreservedAnalyses run(llvm::Function &F,
+                              llvm::FunctionAnalysisManager &) {
+    if (!pushOperationsThroughSelects(F))
+      return llvm::PreservedAnalyses::all();
+    return llvm::PreservedAnalyses::none();
+  }
+};
+} // namespace
+
+void CFGAnalyzer::runOptimizationPipeline(llvm::Function *F,
+                                          llvm::Function *IBIFn) {
   using namespace llvm;
 
   // Some LLVM passes used later in the pipeline scan for cut-offs, meaning that
@@ -634,7 +850,15 @@ void CFGAnalyzer::runOptimizationPipeline(llvm::Function *F) {
     FPM.addPass(InstCombinePass());
     FPM.addPass(GVNPass());
 
-    // Third stage: if enabled, serialize the results and dump the functions on
+    // Third stage: push operations through selects/phis, untangle IBI blocks
+    // that have phis from packet-semantic diamonds, then fold the resulting
+    // expressions.
+    FPM.addPass(PushThroughSelectPass());
+    FPM.addPass(UntangleIBIBlocksPass(IBIFn));
+    FPM.addPass(EarlyCSEPass());
+    FPM.addPass(InstCombinePass());
+
+    // Fourth stage: if enabled, serialize the results and dump the functions on
     // disk with the alias information included as comments.
     if (IndirectBranchInfoSummaryPath.getNumOccurrences() == 1)
       FPM.addPass(IndirectBranchInfoPrinterPass(*OutputIBI));
@@ -770,8 +994,9 @@ FunctionSummary CFGAnalyzer::milkInfo(OutlinedFunction *OutlinedFunction,
     {
       Argument = CI->getArgOperand(JumpsToReturnAddressIndex);
       auto *ConstantOffset = dyn_cast<ConstantInt>(Argument);
-      if (ConstantOffset)
+      if (ConstantOffset) {
         JumpsToReturnAddress = ConstantOffset->getSExtValue() == 0;
+      }
     }
 
     const efa::BasicBlock &Block = blockFromIndirectBranchInfo(CI, CFG);
@@ -787,6 +1012,7 @@ FunctionSummary CFGAnalyzer::milkInfo(OutlinedFunction *OutlinedFunction,
 
     Argument = CI->getArgOperand(StackPointerOffsetIndex);
     auto *StackPointerOffset = dyn_cast<ConstantInt>(Argument);
+
     if (StackPointerOffset != nullptr) {
       int64_t FSO = StackPointerOffset->getSExtValue();
       if (JumpsToReturnAddress) {
@@ -1097,7 +1323,7 @@ FunctionSummary CFGAnalyzer::analyze(const MetaAddress &Entry) {
   materializePCValues(F, Builder);
 
   // Execute the optimization pipeline over the outlined function
-  runOptimizationPipeline(F);
+  runOptimizationPipeline(F, OutlinedFunction.IndirectBranchInfoMarker.get());
 
   // Squeeze out the results obtained from the optimization passes
   auto FunctionInfo = milkInfo(&OutlinedFunction, std::move(CFG));

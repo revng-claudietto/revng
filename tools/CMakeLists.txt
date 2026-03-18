@@ -3,6 +3,7 @@
 #
 
 add_subdirectory(clift-opt)
+add_subdirectory(dump-dfg)
 add_subdirectory(lddtree)
 add_subdirectory(model)
 add_subdirectory(pipeline)

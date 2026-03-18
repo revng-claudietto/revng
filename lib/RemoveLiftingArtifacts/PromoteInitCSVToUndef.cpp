@@ -46,7 +46,9 @@ undefPreservedRegistersInitialization(Function &F,
 
           using namespace Architecture;
           if (Register != getReturnAddressRegister(Architecture)) {
-            Call->replaceAllUsesWith(llvm::UndefValue::get(Call->getType()));
+            auto *Undef = llvm::UndefValue::get(Call->getType());
+            auto *Frozen = new FreezeInst(Undef, "", Call);
+            Call->replaceAllUsesWith(Frozen);
             Call->eraseFromParent();
             Changed = true;
           }

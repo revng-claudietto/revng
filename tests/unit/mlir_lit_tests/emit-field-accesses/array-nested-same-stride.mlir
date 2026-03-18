@@ -11,7 +11,7 @@
 
 // Generic void function prototype with no argument
 !f = !clift.func<
-  "" as "f" : !void()
+  "1000" as "f" : !void()
 >
 
 // Nested array where both levels have the same stride (4 bytes):
@@ -32,30 +32,32 @@
   }
 >
 
-// Access to struct.array[1][1] at offset 4.
-// Should produce a struct access followed by two nested subscript operations.
-clift.func @test_nested_same_stride<!f>() {
-  %0 = clift.local : !s
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !s>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
-    %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
-    %4 = clift.imm 4 : !generic64_t
-    %5 = clift.add %3, %4 : !generic64_t
-    %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
-    clift.yield %6 : !int32_t$ptr
+module attributes {clift.module} {
+  // Access to struct.array[1][1] at offset 4.
+  // Should produce a struct access followed by two nested subscript operations.
+  clift.func @test_nested_same_stride<!f>() {
+    %0 = clift.local : !s
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !s>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
+      %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
+      %4 = clift.imm 4 : !generic64_t
+      %5 = clift.add %3, %4 : !generic64_t
+      %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
+      clift.yield %6 : !int32_t$ptr
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @test_nested_same_stride<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
-// CHECK: [[CAST1:%[0-9]+]] = clift.cast<decay> [[ACCESS]]
-// CHECK: [[IMM1:%[0-9]+]] = clift.imm 0
-// CHECK: [[SUBSCRIPT1:%[0-9]+]] = clift.subscript [[CAST1]], [[IMM1]]
-// CHECK: [[CAST2:%[0-9]+]] = clift.cast<decay> [[SUBSCRIPT1]]
-// CHECK: [[IMM2:%[0-9]+]] = clift.imm 0
-// CHECK: [[SUBSCRIPT2:%[0-9]+]] = clift.subscript [[CAST2]], [[IMM2]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[SUBSCRIPT2]]
-// CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK-LABEL: clift.func @test_nested_same_stride<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
+  // CHECK: [[CAST1:%[0-9]+]] = clift.cast<decay> [[ACCESS]]
+  // CHECK: [[IMM1:%[0-9]+]] = clift.imm 0
+  // CHECK: [[SUBSCRIPT1:%[0-9]+]] = clift.subscript [[CAST1]], [[IMM1]]
+  // CHECK: [[CAST2:%[0-9]+]] = clift.cast<decay> [[SUBSCRIPT1]]
+  // CHECK: [[IMM2:%[0-9]+]] = clift.imm 0
+  // CHECK: [[SUBSCRIPT2:%[0-9]+]] = clift.subscript [[CAST2]], [[IMM2]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[SUBSCRIPT2]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+}

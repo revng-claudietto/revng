@@ -19,7 +19,7 @@
 
 // Generic void function prototype with no argument
 !f = !clift.func<
-  "" as "f" : !void()
+  "1000" as "f" : !void()
 >
 
 !struct_startdistance = !clift.struct<
@@ -35,54 +35,55 @@
 // 12 would lead to a negative `StartDistance`, which should result in an
 // invalid score and not be selected
 
-// Access, of size 4, at offset 6 - should select field at offset 4 (int64_t),
-// because the end distance is within the boundaries of field
-clift.func @test_startdistance<!f>() {
-  %0 = clift.local : !struct_startdistance
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !struct_startdistance>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_startdistance> -> !generic64_t
-    %3 = clift.imm 6 : !generic64_t
-    %4 = clift.add %2, %3 : !generic64_t
-    %5 = clift.cast<bitcast> %4 : !generic64_t -> !clift.ptr<8 to !int32_t>
-    clift.yield %5 : !clift.ptr<8 to !int32_t>
+module attributes {clift.module} {
+  // Access, of size 4, at offset 6 - should select field at offset 4 (int64_t),
+  // because the end distance is within the boundaries of field
+  clift.func @test_startdistance<!f>() {
+    %0 = clift.local : !struct_startdistance
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !struct_startdistance>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_startdistance> -> !generic64_t
+      %3 = clift.imm 6 : !generic64_t
+      %4 = clift.add %2, %3 : !generic64_t
+      %5 = clift.cast<bitcast> %4 : !generic64_t -> !clift.ptr<8 to !int32_t>
+      clift.yield %5 : !clift.ptr<8 to !int32_t>
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @test_startdistance<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS1]]
-// CHECK: [[CAST1:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF2]]
-// CHECK: [[IMM:%[0-9]+]] = clift.imm 2
-// CHECK: [[ADD:%[0-9]+]] = clift.add [[CAST1]], [[IMM]]
-// CHECK: [[CAST2:%[0-9]+]] = clift.cast<bitcast> [[ADD]]
-// CHECK: [[CAST3:%[0-9]+]] = clift.cast<bitcast> [[CAST2]]
-// CHECK: clift.yield [[CAST3]]
+  // CHECK-LABEL: clift.func @test_startdistance<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS1]]
+  // CHECK: [[CAST1:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF2]]
+  // CHECK: [[IMM:%[0-9]+]] = clift.imm 2
+  // CHECK: [[ADD:%[0-9]+]] = clift.add [[CAST1]], [[IMM]]
+  // CHECK: [[CAST2:%[0-9]+]] = clift.cast<bitcast> [[ADD]]
+  // CHECK: [[CAST3:%[0-9]+]] = clift.cast<bitcast> [[CAST2]]
+  // CHECK: clift.yield [[CAST3]]
 
-// Access, of size 8, at offset 6 - should not select field at offset 4
-// (int64_t), because the end distance would overshoot the field, since they
-// only partially overlap
-clift.func @test_enddistance<!f>() {
-  %0 = clift.local : !struct_startdistance
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !struct_startdistance>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_startdistance> -> !generic64_t
-    %3 = clift.imm 6 : !generic64_t
-    %4 = clift.add %2, %3 : !generic64_t
-    %5 = clift.cast<bitcast> %4 : !generic64_t -> !clift.ptr<8 to !int64_t>
-    clift.yield %5 : !clift.ptr<8 to !int64_t>
+  // Access, of size 8, at offset 6 - should not select field at offset 4
+  // (int64_t), because the end distance would overshoot the field, since they
+  // only partially overlap
+  clift.func @test_enddistance<!f>() {
+    %0 = clift.local : !struct_startdistance
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !struct_startdistance>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_startdistance> -> !generic64_t
+      %3 = clift.imm 6 : !generic64_t
+      %4 = clift.add %2, %3 : !generic64_t
+      %5 = clift.cast<bitcast> %4 : !generic64_t -> !clift.ptr<8 to !int64_t>
+      clift.yield %5 : !clift.ptr<8 to !int64_t>
+    }
   }
+
+  // CHECK-LABEL: clift.func @test_enddistance<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[CAST1:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF1]]
+  // CHECK: [[IMM:%[0-9]+]] = clift.imm 6
+  // CHECK: [[ADD:%[0-9]+]] = clift.add [[CAST1]], [[IMM]]
+  // CHECK: [[CAST2:%[0-9]+]] = clift.cast<bitcast> [[ADD]]
+  // CHECK: clift.yield [[CAST2]]
+  // CHECK-NOT: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
 }
-
-// CHECK-LABEL: clift.func @test_enddistance<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[CAST1:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF1]]
-// CHECK: [[IMM:%[0-9]+]] = clift.imm 6
-// CHECK: [[ADD:%[0-9]+]] = clift.add [[CAST1]], [[IMM]]
-// CHECK: [[CAST2:%[0-9]+]] = clift.cast<bitcast> [[ADD]]
-// CHECK: clift.yield [[CAST2]]
-// CHECK-NOT: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
-

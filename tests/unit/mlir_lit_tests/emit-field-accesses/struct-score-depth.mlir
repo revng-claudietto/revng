@@ -19,7 +19,7 @@
 
 // Generic void function prototype with no argument
 !f = !clift.func<
-  "" as "f" : !void()
+  "1000" as "f" : !void()
 >
 
 !inner_struct = !clift.struct<
@@ -41,22 +41,24 @@
   }
 >
 
-// Access at offset 0 with int32_t, which should select the shallow union field
-// (depth 2: struct -> union -> int32_t) over the deep path
-// (depth 3: struct -> union -> inner_struct -> int32_t)
-clift.func @test_depth<!f>() {
-  %0 = clift.local : !struct_depth
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !struct_depth>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_depth> -> !clift.ptr<8 to !int32_t>
-    clift.yield %2 : !clift.ptr<8 to !int32_t>
+module attributes {clift.module} {
+  // Access at offset 0 with int32_t, which should select the shallow union field
+  // (depth 2: struct -> union -> int32_t) over the deep path
+  // (depth 3: struct -> union -> inner_struct -> int32_t)
+  clift.func @test_depth<!f>() {
+    %0 = clift.local : !struct_depth
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !struct_depth>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_depth> -> !clift.ptr<8 to !int32_t>
+      clift.yield %2 : !clift.ptr<8 to !int32_t>
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @test_depth<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_3_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK-LABEL: clift.func @test_depth<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_3_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+}

@@ -16,7 +16,7 @@
 
 // Generic void function prototype with no argument
 !f = !clift.func<
-  "" as "f" : !void()
+  "1000" as "f" : !void()
 >
 
 !s = !clift.struct<
@@ -28,53 +28,55 @@
 
 // Struct access with a leftover offset
 
-clift.func @f<!f>() {
-  %0 = clift.local : !s
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !s>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
-    %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
-    %4 = clift.imm 6 : !generic64_t
-    %5 = clift.add %3, %4 : !generic64_t
-    %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int8_t>
-    clift.yield %6 : !int8_t$ptr
+module attributes {clift.module} {
+  clift.func @f<!f>() {
+    %0 = clift.local : !s
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !s>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
+      %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
+      %4 = clift.imm 6 : !generic64_t
+      %5 = clift.add %3, %4 : !generic64_t
+      %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int8_t>
+      clift.yield %6 : !int8_t$ptr
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @f<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS]]
-// CHECK: [[CAST1:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF2]]
-// CHECK: [[IMM:%[0-9]+]] = clift.imm 2
-// CHECK: [[ADD:%[0-9]+]] = clift.add [[CAST1]], [[IMM]]
-// CHECK: [[CAST2:%[0-9]+]] = clift.cast<bitcast> [[ADD]]
-// CHECK: [[CAST3:%[0-9]+]] = clift.cast<bitcast> [[CAST2]]
-// CHECK: clift.yield [[CAST3]]
+  // CHECK-LABEL: clift.func @f<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS]]
+  // CHECK: [[CAST1:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF2]]
+  // CHECK: [[IMM:%[0-9]+]] = clift.imm 2
+  // CHECK: [[ADD:%[0-9]+]] = clift.add [[CAST1]], [[IMM]]
+  // CHECK: [[CAST2:%[0-9]+]] = clift.cast<bitcast> [[ADD]]
+  // CHECK: [[CAST3:%[0-9]+]] = clift.cast<bitcast> [[CAST2]]
+  // CHECK: clift.yield [[CAST3]]
 
-// Struct access going over the boundaries of the struct, not converted into an access
+  // Struct access going over the boundaries of the struct, not converted into an access
 
-clift.func @g<!f>() {
-  %0 = clift.local : !s
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !s>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
-    %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
-    %4 = clift.imm 8 : !generic64_t
-    %5 = clift.add %3, %4 : !generic64_t
-    %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int8_t>
-    clift.yield %6 : !int8_t$ptr
+  clift.func @g<!f>() {
+    %0 = clift.local : !s
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !s>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
+      %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
+      %4 = clift.imm 8 : !generic64_t
+      %5 = clift.add %3, %4 : !generic64_t
+      %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int8_t>
+      clift.yield %6 : !int8_t$ptr
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @g<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
-// CHECK: [[ADDRESSOF:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[CAST1:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF]]
-// CHECK: [[CAST2:%[0-9]+]] = clift.cast<bitcast> [[CAST1]]
-// CHECK: [[IMM:%[0-9]+]] = clift.imm 8
-// CHECK: [[ADD:%[0-9]+]] = clift.add [[CAST2]], [[IMM]]
-// CHECK: [[CAST3:%[0-9]+]] = clift.cast<bitcast> [[ADD]]
-// CHECK: clift.yield [[CAST3]]
-// CHECK-NOT: [[ACCESS:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF]]
+  // CHECK-LABEL: clift.func @g<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
+  // CHECK: [[ADDRESSOF:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[CAST1:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF]]
+  // CHECK: [[CAST2:%[0-9]+]] = clift.cast<bitcast> [[CAST1]]
+  // CHECK: [[IMM:%[0-9]+]] = clift.imm 8
+  // CHECK: [[ADD:%[0-9]+]] = clift.add [[CAST2]], [[IMM]]
+  // CHECK: [[CAST3:%[0-9]+]] = clift.cast<bitcast> [[ADD]]
+  // CHECK: clift.yield [[CAST3]]
+  // CHECK-NOT: [[ACCESS:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF]]
+}

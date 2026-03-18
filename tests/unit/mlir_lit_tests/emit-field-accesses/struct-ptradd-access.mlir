@@ -13,7 +13,7 @@
 
 // Generic void function prototype with no argument
 !f = !clift.func<
-  "" as "f" : !void()
+  "1000" as "f" : !void()
 >
 
 !s = !clift.struct<
@@ -28,20 +28,22 @@
 // Access, with offset computed with a `ptr_add` operation, to the third field
 // of the `struct`
 
-clift.func @f<!f>() {
-  %0 = clift.local : !s
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !s>
-    %2 = clift.cast<bitcast> %1 : !s$ptr -> !int32_t$ptr
-    %3 = clift.imm 2 : !generic64_t
-    %4 = clift.ptr_add %2, %3 : (!int32_t$ptr, !generic64_t)
-    clift.yield %4 : !int32_t$ptr
+module attributes {clift.module} {
+  clift.func @f<!f>() {
+    %0 = clift.local : !s
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !s>
+      %2 = clift.cast<bitcast> %1 : !s$ptr -> !int32_t$ptr
+      %3 = clift.imm 2 : !generic64_t
+      %4 = clift.ptr_add %2, %3 : (!int32_t$ptr, !generic64_t)
+      clift.yield %4 : !int32_t$ptr
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @f<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS:%[0-9]+]] = clift.access<indirect 2> [[ADDRESSOF1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS]]
-// CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK-LABEL: clift.func @f<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS:%[0-9]+]] = clift.access<indirect 2> [[ADDRESSOF1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+}

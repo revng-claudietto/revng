@@ -19,7 +19,7 @@
 
 // Generic void function prototype with no argument
 !f = !clift.func<
-  "" as "f" : !void()
+  "1000" as "f" : !void()
 >
 
 // Create nested arrays with different stride patterns
@@ -45,30 +45,32 @@
   }
 >
 
-// Access at offset 28 (which is 20 + 8 = array[1][2])
-// Should select the nested array path due to more strides matching
-clift.func @test_commonstrides<!f>() {
-  %0 = clift.local : !struct_commonstrides
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !struct_commonstrides>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_commonstrides> -> !generic64_t
-    %3 = clift.imm 28 : !generic64_t
-    %4 = clift.add %2, %3 : !generic64_t
-    %5 = clift.cast<bitcast> %4 : !generic64_t -> !clift.ptr<8 to !int32_t>
-    clift.yield %5 : !clift.ptr<8 to !int32_t>
+module attributes {clift.module} {
+  // Access at offset 28 (which is 20 + 8 = array[1][2])
+  // Should select the nested array path due to more strides matching
+  clift.func @test_commonstrides<!f>() {
+    %0 = clift.local : !struct_commonstrides
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !struct_commonstrides>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_commonstrides> -> !generic64_t
+      %3 = clift.imm 28 : !generic64_t
+      %4 = clift.add %2, %3 : !generic64_t
+      %5 = clift.cast<bitcast> %4 : !generic64_t -> !clift.ptr<8 to !int32_t>
+      clift.yield %5 : !clift.ptr<8 to !int32_t>
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @test_commonstrides<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
-// CHECK: [[CAST1:%[0-9]+]] = clift.cast<decay> [[ACCESS2]]
-// CHECK: [[IMM1:%[0-9]+]] = clift.imm 1
-// CHECK: [[SUBSCRIPT1:%[0-9]+]] = clift.subscript [[CAST1]], [[IMM1]]
-// CHECK: [[CAST2:%[0-9]+]] = clift.cast<decay> [[SUBSCRIPT1]]
-// CHECK: [[IMM2:%[0-9]+]] = clift.imm 2
-// CHECK: [[SUBSCRIPT2:%[0-9]+]] = clift.subscript [[CAST2]], [[IMM2]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[SUBSCRIPT2]]
-// CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK-LABEL: clift.func @test_commonstrides<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
+  // CHECK: [[CAST1:%[0-9]+]] = clift.cast<decay> [[ACCESS2]]
+  // CHECK: [[IMM1:%[0-9]+]] = clift.imm 1
+  // CHECK: [[SUBSCRIPT1:%[0-9]+]] = clift.subscript [[CAST1]], [[IMM1]]
+  // CHECK: [[CAST2:%[0-9]+]] = clift.cast<decay> [[SUBSCRIPT1]]
+  // CHECK: [[IMM2:%[0-9]+]] = clift.imm 2
+  // CHECK: [[SUBSCRIPT2:%[0-9]+]] = clift.subscript [[CAST2]], [[IMM2]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[SUBSCRIPT2]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+}

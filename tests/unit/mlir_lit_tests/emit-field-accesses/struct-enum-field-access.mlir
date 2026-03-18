@@ -11,12 +11,12 @@
 
 // Generic void function prototype with no argument
 !f = !clift.func<
-  "" as "f" : !void()
+  "1000" as "f" : !void()
 >
 
 // Enum type with underlying `int32_t`
 !my_enum = !clift.enum<
-  "" as "my_enum" : !int32_t {
+  "1001" as "my_enum" : !int32_t {
     "" as "A" : 0,
     "" as "B" : 1
   }
@@ -31,24 +31,26 @@
   }
 >
 
-// Access to the enum field at offset 4
-clift.func @test_enum_field<!f>() {
-  %0 = clift.local : !s
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !s>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
-    %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
-    %4 = clift.imm 4 : !generic64_t
-    %5 = clift.add %3, %4 : !generic64_t
-    %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
-    clift.yield %6 : !int32_t$ptr
+module attributes {clift.module} {
+  // Access to the enum field at offset 4
+  clift.func @test_enum_field<!f>() {
+    %0 = clift.local : !s
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !s>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
+      %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
+      %4 = clift.imm 4 : !generic64_t
+      %5 = clift.add %3, %4 : !generic64_t
+      %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
+      clift.yield %6 : !int32_t$ptr
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @test_enum_field<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS]]
-// CHECK: [[CAST:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF2]]
-// CHECK: clift.yield [[CAST]]
+  // CHECK-LABEL: clift.func @test_enum_field<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS]]
+  // CHECK: [[CAST:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF2]]
+  // CHECK: clift.yield [[CAST]]
+}

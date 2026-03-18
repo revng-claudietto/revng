@@ -19,7 +19,7 @@
 
 // Generic void function prototype with no argument
 !f = !clift.func<
-  "" as "f" : !void()
+  "1000" as "f" : !void()
 >
 
 // Test the SizeRelation criterion: Same > Larger > Smaller
@@ -39,56 +39,58 @@
   }
 >
 
-// Access at offset 0 with size 8 - should select the int64_t field (same size)
-clift.func @test_sizerelation_same64<!f>() {
-  %0 = clift.local : !struct_sizerelation
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !struct_sizerelation>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_sizerelation> -> !clift.ptr<8 to !int64_t>
-    clift.yield %2 : !clift.ptr<8 to !int64_t>
+module attributes {clift.module} {
+  // Access at offset 0 with size 8 - should select the int64_t field (same size)
+  clift.func @test_sizerelation_same64<!f>() {
+    %0 = clift.local : !struct_sizerelation
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !struct_sizerelation>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_sizerelation> -> !clift.ptr<8 to !int64_t>
+      clift.yield %2 : !clift.ptr<8 to !int64_t>
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @test_sizerelation_same64<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-// CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDR1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
-// CHECK: [[ADDR2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDR2]]
+  // CHECK-LABEL: clift.func @test_sizerelation_same64<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
+  // CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDR1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
+  // CHECK: [[ADDR2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDR2]]
 
-// Access at offset 0 with size 4 - should select the int32_t field (same size)
-clift.func @test_sizerelation_same32<!f>() {
-  %0 = clift.local : !struct_sizerelation
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !struct_sizerelation>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_sizerelation> -> !clift.ptr<8 to !int32_t>
-    clift.yield %2 : !clift.ptr<8 to !int32_t>
+  // Access at offset 0 with size 4 - should select the int32_t field (same size)
+  clift.func @test_sizerelation_same32<!f>() {
+    %0 = clift.local : !struct_sizerelation
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !struct_sizerelation>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_sizerelation> -> !clift.ptr<8 to !int32_t>
+      clift.yield %2 : !clift.ptr<8 to !int32_t>
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @test_sizerelation_same32<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-// CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDR1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
-// CHECK: [[ADDR2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDR2]]
+  // CHECK-LABEL: clift.func @test_sizerelation_same32<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
+  // CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDR1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
+  // CHECK: [[ADDR2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDR2]]
 
-// Access at offset 0 with size 2 should select the int16_t field (same size)
-clift.func @test_sizerelation_same16<!f>() {
-  %0 = clift.local : !struct_sizerelation
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !struct_sizerelation>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_sizerelation> -> !clift.ptr<8 to !int16_t>
-    clift.yield %2 : !clift.ptr<8 to !int16_t>
+  // Access at offset 0 with size 2 should select the int16_t field (same size)
+  clift.func @test_sizerelation_same16<!f>() {
+    %0 = clift.local : !struct_sizerelation
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !struct_sizerelation>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_sizerelation> -> !clift.ptr<8 to !int16_t>
+      clift.yield %2 : !clift.ptr<8 to !int16_t>
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @test_sizerelation_same16<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-// CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDR1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 2> [[ACCESS1]]
-// CHECK: [[ADDR2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDR2]]
+  // CHECK-LABEL: clift.func @test_sizerelation_same16<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
+  // CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDR1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 2> [[ACCESS1]]
+  // CHECK: [[ADDR2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDR2]]
+}

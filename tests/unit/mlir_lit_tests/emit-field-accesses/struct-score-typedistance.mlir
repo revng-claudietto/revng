@@ -19,7 +19,7 @@
 
 // Generic void function prototype with no argument
 !f = !clift.func<
-  "" as "f" : !void()
+  "1000" as "f" : !void()
 >
 
 !union_typedistance = !clift.union<
@@ -35,60 +35,6 @@
     "" : offset(0) !union_typedistance
   }
 >
-
-// Access with signed type - should select int32_t field
-clift.func @test_typedistance1<!f>() {
-  %0 = clift.local : !struct_typedistance
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !struct_typedistance>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_typedistance> -> !clift.ptr<8 to !int32_t>
-    clift.yield %2 : !clift.ptr<8 to !int32_t>
-  }
-}
-
-// CHECK-LABEL: clift.func @test_typedistance1<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDRESSOF2]]
-
-// Access with unsigned type - should select uint32_t field
-clift.func @test_typedistance2<!f>() {
-  %0 = clift.local : !struct_typedistance
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !struct_typedistance>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_typedistance> -> !clift.ptr<8 to !uint32_t>
-    clift.yield %2 : !clift.ptr<8 to !uint32_t>
-  }
-}
-
-// CHECK-LABEL: clift.func @test_typedistance2<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDRESSOF2]]
-
-// Access with float type - should select float32_t field
-clift.func @test_typedistance3<!f>() {
-  %0 = clift.local : !struct_typedistance
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !struct_typedistance>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_typedistance> -> !clift.ptr<8 to !float32_t>
-    clift.yield %2 : !clift.ptr<8 to !float32_t>
-  }
-}
-
-// CHECK-LABEL: clift.func @test_typedistance3<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 2> [[ACCESS1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDRESSOF2]]
 
 // The union now misses the `int32_t`, therefore we should revert to `uint32_t`
 // as an alternative
@@ -106,20 +52,76 @@ clift.func @test_typedistance3<!f>() {
   }
 >
 
-// Access with signed type - should select uint32_t field
-clift.func @test_typedistance4<!f>() {
-  %0 = clift.local : !struct_typedistance
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !struct_typedistance>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_typedistance> -> !clift.ptr<8 to !int32_t>
-    clift.yield %2 : !clift.ptr<8 to !int32_t>
+module attributes {clift.module} {
+  // Access with signed type - should select int32_t field
+  clift.func @test_typedistance1<!f>() {
+    %0 = clift.local : !struct_typedistance
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !struct_typedistance>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_typedistance> -> !clift.ptr<8 to !int32_t>
+      clift.yield %2 : !clift.ptr<8 to !int32_t>
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @test_typedistance4<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK-LABEL: clift.func @test_typedistance1<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+
+  // Access with unsigned type - should select uint32_t field
+  clift.func @test_typedistance2<!f>() {
+    %0 = clift.local : !struct_typedistance
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !struct_typedistance>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_typedistance> -> !clift.ptr<8 to !uint32_t>
+      clift.yield %2 : !clift.ptr<8 to !uint32_t>
+    }
+  }
+
+  // CHECK-LABEL: clift.func @test_typedistance2<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+
+  // Access with float type - should select float32_t field
+  clift.func @test_typedistance3<!f>() {
+    %0 = clift.local : !struct_typedistance
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !struct_typedistance>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_typedistance> -> !clift.ptr<8 to !float32_t>
+      clift.yield %2 : !clift.ptr<8 to !float32_t>
+    }
+  }
+
+  // CHECK-LABEL: clift.func @test_typedistance3<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 2> [[ACCESS1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+
+  // Access with signed type - should select uint32_t field
+  clift.func @test_typedistance4<!f>() {
+    %0 = clift.local : !struct_typedistance
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !struct_typedistance>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !struct_typedistance> -> !clift.ptr<8 to !int32_t>
+      clift.yield %2 : !clift.ptr<8 to !int32_t>
+    }
+  }
+
+  // CHECK-LABEL: clift.func @test_typedistance4<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+}

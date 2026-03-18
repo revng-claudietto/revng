@@ -15,7 +15,7 @@
 
 // Generic void function prototype with no argument
 !f = !clift.func<
-  "" as "f" : !void()
+  "1000" as "f" : !void()
 >
 
 !s = !clift.struct<
@@ -39,81 +39,6 @@
   }
 >
 
-// Access to the `int64_t` field of the nested union, selected due to the type
-// of the access
-
-clift.func @f<!f>() {
-  %0 = clift.local : !s2
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !s2>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s2> -> !clift.ptr<8 to !void>
-    %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
-    %4 = clift.imm 4 : !generic64_t
-    %5 = clift.add %3, %4 : !generic64_t
-    %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int64_t>
-    clift.yield %6 : !int64_t$ptr
-  }
-}
-
-// CHECK-LABEL: clift.func @f<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_3_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDRESSOF2]]
-
-// Access to the `struct` field of the nested union, selected due to the type of
-// the access towards the nested struct field
-
-clift.func @g<!f>() {
-  %0 = clift.local : !s2
-    clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !s2>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s2> -> !clift.ptr<8 to !void>
-    %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
-    %4 = clift.imm 4 : !generic64_t
-    %5 = clift.add %3, %4 : !generic64_t
-    %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
-    clift.yield %6 : !int32_t$ptr
-  }
-}
-
-// CHECK-LABEL: clift.func @g<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_3_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
-// CHECK: [[ACCESS3:%[0-9]+]] = clift.access< 0> [[ACCESS2]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS3]]
-// CHECK: clift.yield [[ADDRESSOF2]]
-
-// Access to the `struct` field of the nested union, second field, selected due
-// to the offset into the nested `struct`
-
-clift.func @h<!f>() {
-  %0 = clift.local : !s2
-    clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !s2>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s2> -> !clift.ptr<8 to !void>
-    %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
-    %4 = clift.imm 8 : !generic64_t
-    %5 = clift.add %3, %4 : !generic64_t
-    %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
-    clift.yield %6 : !int32_t$ptr
-  }
-}
-
-// CHECK-LABEL: clift.func @h<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_3_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
-// CHECK: [[ACCESS3:%[0-9]+]] = clift.access< 1> [[ACCESS2]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS3]]
-// CHECK: clift.yield [[ADDRESSOF2]]
-
-
 !u2 = !clift.union<
    "4" : {
     "" : !s,
@@ -128,26 +53,103 @@ clift.func @h<!f>() {
   }
 >
 
-// Access to the `int32_t` field of the nested union, selected due to the type
-// of the access and the depth of the access
+// Access to the `int64_t` field of the nested union, selected due to the type
+// of the access
 
-clift.func @i<!f>() {
-  %0 = clift.local : !s3
+module attributes {clift.module} {
+  clift.func @f<!f>() {
+    %0 = clift.local : !s2
     clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !s3>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s3> -> !clift.ptr<8 to !void>
-    %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
-    %4 = clift.imm 4 : !generic64_t
-    %5 = clift.add %3, %4 : !generic64_t
-    %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
-    clift.yield %6 : !int32_t$ptr
+      %1 = clift.addressof %0 : !clift.ptr<8 to !s2>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s2> -> !clift.ptr<8 to !void>
+      %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
+      %4 = clift.imm 4 : !generic64_t
+      %5 = clift.add %3, %4 : !generic64_t
+      %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int64_t>
+      clift.yield %6 : !int64_t$ptr
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @i<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_5_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK-LABEL: clift.func @f<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_3_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+
+  // Access to the `struct` field of the nested union, selected due to the type of
+  // the access towards the nested struct field
+
+  clift.func @g<!f>() {
+    %0 = clift.local : !s2
+      clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !s2>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s2> -> !clift.ptr<8 to !void>
+      %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
+      %4 = clift.imm 4 : !generic64_t
+      %5 = clift.add %3, %4 : !generic64_t
+      %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
+      clift.yield %6 : !int32_t$ptr
+    }
+  }
+
+  // CHECK-LABEL: clift.func @g<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_3_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
+  // CHECK: [[ACCESS3:%[0-9]+]] = clift.access< 0> [[ACCESS2]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS3]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+
+  // Access to the `struct` field of the nested union, second field, selected due
+  // to the offset into the nested `struct`
+
+  clift.func @h<!f>() {
+    %0 = clift.local : !s2
+      clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !s2>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s2> -> !clift.ptr<8 to !void>
+      %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
+      %4 = clift.imm 8 : !generic64_t
+      %5 = clift.add %3, %4 : !generic64_t
+      %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
+      clift.yield %6 : !int32_t$ptr
+    }
+  }
+
+  // CHECK-LABEL: clift.func @h<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_3_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
+  // CHECK: [[ACCESS3:%[0-9]+]] = clift.access< 1> [[ACCESS2]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS3]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+
+
+  // Access to the `int32_t` field of the nested union, selected due to the type
+  // of the access and the depth of the access
+
+  clift.func @i<!f>() {
+    %0 = clift.local : !s3
+      clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !s3>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s3> -> !clift.ptr<8 to !void>
+      %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
+      %4 = clift.imm 4 : !generic64_t
+      %5 = clift.add %3, %4 : !generic64_t
+      %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
+      clift.yield %6 : !int32_t$ptr
+    }
+  }
+
+  // CHECK-LABEL: clift.func @i<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_5_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+}

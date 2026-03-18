@@ -14,7 +14,7 @@
 
 // Generic void function prototype with no argument
 !f = !clift.func<
-  "" as "f" : !void()
+  "1000" as "f" : !void()
 >
 
 !nested_s = !clift.struct<
@@ -34,48 +34,50 @@
 // Struct access to the second field of a struct nested in the first field of
 // the outer struct
 
-clift.func @f<!f>() {
-  %0 = clift.local : !s
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !s>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
-    %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
-    %4 = clift.imm 4 : !generic64_t
-    %5 = clift.add %3, %4 : !generic64_t
-    %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
-    clift.yield %6 : !int32_t$ptr
+module attributes {clift.module} {
+  clift.func @f<!f>() {
+    %0 = clift.local : !s
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !s>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
+      %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
+      %4 = clift.imm 4 : !generic64_t
+      %5 = clift.add %3, %4 : !generic64_t
+      %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
+      clift.yield %6 : !int32_t$ptr
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @f<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK-LABEL: clift.func @f<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
 
 
-// Access to the beginning of the struct which we do not convert into a
-// explicit access
+  // Access to the beginning of the struct which we do not convert into a
+  // explicit access
 
-clift.func @g<!f>() {
-  %0 = clift.local : !s
-  clift.expr {
-    %1 = clift.addressof %0 : !clift.ptr<8 to !s>
-    %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
-    %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
-    %4 = clift.imm 0 : !generic64_t
-    %5 = clift.add %3, %4 : !generic64_t
-    %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
-    clift.yield %6 : !int32_t$ptr
+  clift.func @g<!f>() {
+    %0 = clift.local : !s
+    clift.expr {
+      %1 = clift.addressof %0 : !clift.ptr<8 to !s>
+      %2 = clift.cast<bitcast> %1 : !clift.ptr<8 to !s> -> !clift.ptr<8 to !void>
+      %3 = clift.cast<bitcast> %2 : !clift.ptr<8 to !void> -> !generic64_t
+      %4 = clift.imm 0 : !generic64_t
+      %5 = clift.add %3, %4 : !generic64_t
+      %6 = clift.cast<bitcast> %5 : !generic64_t -> !clift.ptr<8 to !int32_t>
+      clift.yield %6 : !int32_t$ptr
+    }
   }
-}
 
-// CHECK-LABEL: clift.func @g<!f>
-// CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-// CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
-// CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
-// CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
-// CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-// CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK-LABEL: clift.func @g<!f>
+  // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
+  // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
+  // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
+  // CHECK: clift.yield [[ADDRESSOF2]]
+}

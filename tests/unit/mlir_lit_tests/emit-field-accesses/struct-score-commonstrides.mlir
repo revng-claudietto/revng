@@ -62,7 +62,7 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @test_commonstrides<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_2_>
   // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
   // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
   // CHECK: [[CAST1:%[0-9]+]] = clift.cast<decay> [[ACCESS2]]
@@ -72,5 +72,5 @@ module attributes {clift.module} {
   // CHECK: [[IMM2:%[0-9]+]] = clift.imm 2
   // CHECK: [[SUBSCRIPT2:%[0-9]+]] = clift.subscript [[CAST2]], [[IMM2]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[SUBSCRIPT2]]
-  // CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK: clift.yield [[ADDRESSOF2]] : !clift.ptr<8 to !int32_t>
 }

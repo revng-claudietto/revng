@@ -50,11 +50,11 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @f<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_2_>
   // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
   // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-  // CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK: clift.yield [[ADDRESSOF2]] : !clift.ptr<8 to !int32_t>
 
 
   // Access to the beginning of the struct which we do not convert into a
@@ -75,9 +75,9 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @g<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_2_>
   // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
   // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-  // CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK: clift.yield [[ADDRESSOF2]] : !clift.ptr<8 to !int32_t>
 }

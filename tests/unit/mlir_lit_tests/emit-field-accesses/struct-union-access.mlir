@@ -50,11 +50,11 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @f<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_2_>
   // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
   // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-  // CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK: clift.yield [[ADDRESSOF2]] : !clift.ptr<8 to !int32_t>
 
   // Access the second field of the union based on the type (size) of the returned
   // pointer
@@ -74,11 +74,11 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @g<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_2_>
   // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
   // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-  // CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK: clift.yield [[ADDRESSOF2]] : !clift.ptr<8 to !int16_t>
 
   // Access to the second field of the `struct`, plus a `Leftover` remaining part
   // of the access
@@ -98,7 +98,7 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @h<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_2_>
   // CHECK: [[ACCESS:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS]]
   // CHECK: [[CAST1:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF2]]
@@ -106,5 +106,5 @@ module attributes {clift.module} {
   // CHECK: [[ADD:%[0-9]+]] = clift.add [[CAST1]], [[IMM]]
   // CHECK: [[CAST2:%[0-9]+]] = clift.cast<bitcast> [[ADD]]
   // CHECK: [[CAST3:%[0-9]+]] = clift.cast<bitcast> [[CAST2]]
-  // CHECK: clift.yield [[CAST3]]
+  // CHECK: clift.yield [[CAST3]] : !clift.ptr<8 to !int16_t>
 }

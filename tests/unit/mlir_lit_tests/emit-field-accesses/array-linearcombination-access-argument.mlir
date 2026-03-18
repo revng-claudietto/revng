@@ -42,10 +42,10 @@ module attributes {clift.module} {
   // the array
   // CHECK: clift.func @f<!f>([[ARG0:%[0-9a-z]*]]: !generic64_t)
   // CHECK: [[ARRAY:%[0-9]+]] = clift.local : !clift.array<10 x !int32_t>
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[ARRAY]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[ARRAY]] : !clift.ptr<8 to !clift.array<10 x !int32_t>>
   // CHECK: [[INDIRECTION:%[0-9]+]] = clift.indirection [[ADDRESSOF1]]
   // CHECK: [[CAST:%[0-9]+]] = clift.cast<decay> [[INDIRECTION]]
   // CHECK: [[SUBSCRIPT:%[0-9]+]] = clift.subscript [[CAST]], [[ARG0]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[SUBSCRIPT]]
-  // CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK: clift.yield [[ADDRESSOF2]] : !clift.ptr<8 to !int32_t>
 }

@@ -47,11 +47,11 @@ module attributes {clift.module} {
   // CHECK: clift.global [[GLOBAL:@[0-9a-z]*]]
   // CHECK-LABEL: clift.func @f<!f>
   // CHECK: [[ARRAY:%[0-9]+]] = clift.local : !clift.array<10 x !int32_t>
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[ARRAY]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[ARRAY]] : !clift.ptr<8 to !clift.array<10 x !int32_t>>
   // CHECK: [[USE:%[0-9a-z]+]] = clift.use [[GLOBAL]]
   // CHECK: [[INDIRECTION:%[0-9]+]] = clift.indirection [[ADDRESSOF1]]
   // CHECK: [[CAST:%[0-9]+]] = clift.cast<decay> [[INDIRECTION]]
   // CHECK: [[SUBSCRIPT:%[0-9]+]] = clift.subscript [[CAST]], [[USE]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[SUBSCRIPT]]
-  // CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK: clift.yield [[ADDRESSOF2]] : !clift.ptr<8 to !int32_t>
 }

@@ -55,14 +55,14 @@ module attributes {clift.module} {
   }
 
   // CHECK-LABEL: clift.func @f<!f>
-  // CHECK: [[ARRAY:%[0-9]+]] = clift.local : !clift.array
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[ARRAY]]
+  // CHECK: [[ARRAY:%[0-9]+]] = clift.local : !clift.array<10 x !int32_t>
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[ARRAY]] : !clift.ptr<8 to !clift.array<10 x !int32_t>>
   // CHECK: [[INDIRECTION:%[0-9]+]] = clift.indirection [[ADDRESSOF1]]
   // CHECK: [[CAST1:%[0-9]+]] = clift.cast<decay> [[INDIRECTION]]
   // CHECK: [[IMM:%[0-9]+]] = clift.imm 2
   // CHECK: [[SUBSCRIPT:%[0-9]+]] = clift.subscript [[CAST1]], [[IMM]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[SUBSCRIPT]]
-  // CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK: clift.yield [[ADDRESSOF2]] : !clift.ptr<8 to !int32_t>
 
 
   // `array` access to the first nested `struct` field
@@ -84,13 +84,13 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @g<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_2_>
   // CHECK: [[ACCESS:%[0-9]+]] = clift.access<indirect 0> [[ADDRESSOF1]]
   // CHECK: [[CAST1:%[0-9]+]] = clift.cast<decay> [[ACCESS]]
   // CHECK: [[IMM:%[0-9]+]] = clift.imm 1
   // CHECK: [[SUBSCRIPT:%[0-9]+]] = clift.subscript [[CAST1]], [[IMM]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[SUBSCRIPT]]
-  // CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK: clift.yield [[ADDRESSOF2]] : !clift.ptr<8 to !int32_t>
 
 
   // Access to the second `struct` field nested inside an `array`
@@ -114,12 +114,12 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @h<!f>
   // CHECK: [[ARRAY:%[0-9]+]] = clift.local : !clift.array<10 x !_1_>
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[ARRAY]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[ARRAY]] : !clift.ptr<8 to !clift.array<10 x !_1_>>
   // CHECK: [[INDIRECTION:%[0-9]+]] = clift.indirection [[ADDRESSOF1]]
   // CHECK: [[CAST1:%[0-9]+]] = clift.cast<decay> [[INDIRECTION]]
   // CHECK: [[IMM:%[0-9]+]] = clift.imm 2
   // CHECK: [[SUBSCRIPT:%[0-9]+]] = clift.subscript [[CAST1]], [[IMM]]
   // CHECK: [[ACCESS:%[0-9]+]] = clift.access< 1> [[SUBSCRIPT]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS]]
-  // CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK: clift.yield [[ADDRESSOF2]] : !clift.ptr<8 to !int32_t>
 }

@@ -52,11 +52,11 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @test_sizerelation_same64<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-  // CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_2_>
   // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDR1]]
   // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 0> [[ACCESS1]]
   // CHECK: [[ADDR2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-  // CHECK: clift.yield [[ADDR2]]
+  // CHECK: clift.yield [[ADDR2]] : !clift.ptr<8 to !int64_t>
 
   // Access at offset 0 with size 4 - should select the int32_t field (same size)
   clift.func @test_sizerelation_same32<!f>() {
@@ -70,11 +70,11 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @test_sizerelation_same32<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-  // CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_2_>
   // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDR1]]
   // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 1> [[ACCESS1]]
   // CHECK: [[ADDR2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-  // CHECK: clift.yield [[ADDR2]]
+  // CHECK: clift.yield [[ADDR2]] : !clift.ptr<8 to !int32_t>
 
   // Access at offset 0 with size 2 should select the int16_t field (same size)
   clift.func @test_sizerelation_same16<!f>() {
@@ -88,9 +88,9 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @test_sizerelation_same16<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_2_
-  // CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDR1:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_2_>
   // CHECK: [[ACCESS1:%[0-9]+]] = clift.access<indirect 0> [[ADDR1]]
   // CHECK: [[ACCESS2:%[0-9]+]] = clift.access< 2> [[ACCESS1]]
   // CHECK: [[ADDR2:%[0-9]+]] = clift.addressof [[ACCESS2]]
-  // CHECK: clift.yield [[ADDR2]]
+  // CHECK: clift.yield [[ADDR2]] : !clift.ptr<8 to !int16_t>
 }

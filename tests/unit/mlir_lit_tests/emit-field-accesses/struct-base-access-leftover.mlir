@@ -44,7 +44,7 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @f<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_1_>
   // CHECK: [[ACCESS:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF1]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[ACCESS]]
   // CHECK: [[CAST1:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF2]]
@@ -52,7 +52,7 @@ module attributes {clift.module} {
   // CHECK: [[ADD:%[0-9]+]] = clift.add [[CAST1]], [[IMM]]
   // CHECK: [[CAST2:%[0-9]+]] = clift.cast<bitcast> [[ADD]]
   // CHECK: [[CAST3:%[0-9]+]] = clift.cast<bitcast> [[CAST2]]
-  // CHECK: clift.yield [[CAST3]]
+  // CHECK: clift.yield [[CAST3]] : !clift.ptr<8 to !int8_t>
 
   // Struct access going over the boundaries of the struct, not converted into an access
 
@@ -71,12 +71,12 @@ module attributes {clift.module} {
 
   // CHECK-LABEL: clift.func @g<!f>
   // CHECK: [[STRUCT:%[0-9]+]] = clift.local : !_1_
-  // CHECK: [[ADDRESSOF:%[0-9]+]] = clift.addressof [[STRUCT]]
+  // CHECK: [[ADDRESSOF:%[0-9]+]] = clift.addressof [[STRUCT]] : !clift.ptr<8 to !_1_>
   // CHECK: [[CAST1:%[0-9]+]] = clift.cast<bitcast> [[ADDRESSOF]]
   // CHECK: [[CAST2:%[0-9]+]] = clift.cast<bitcast> [[CAST1]]
   // CHECK: [[IMM:%[0-9]+]] = clift.imm 8
   // CHECK: [[ADD:%[0-9]+]] = clift.add [[CAST2]], [[IMM]]
   // CHECK: [[CAST3:%[0-9]+]] = clift.cast<bitcast> [[ADD]]
-  // CHECK: clift.yield [[CAST3]]
+  // CHECK: clift.yield [[CAST3]] : !clift.ptr<8 to !int8_t>
   // CHECK-NOT: [[ACCESS:%[0-9]+]] = clift.access<indirect 1> [[ADDRESSOF]]
 }

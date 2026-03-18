@@ -42,7 +42,7 @@ module attributes {clift.module} {
   // Both nested array levels should be traversed: outer[1][0]
   // CHECK-LABEL: clift.func @test_common_strides_duplicates<!f>
   // CHECK: [[ARRAY:%[0-9]+]] = clift.local : !clift.array<3 x !clift.array<1 x !int32_t>>
-  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[ARRAY]]
+  // CHECK: [[ADDRESSOF1:%[0-9]+]] = clift.addressof [[ARRAY]] : !clift.ptr<8 to !clift.array<3 x !clift.array<1 x !int32_t>>>
   // CHECK: [[INDIR:%[0-9]+]] = clift.indirection [[ADDRESSOF1]]
   // CHECK: [[CAST1:%[0-9]+]] = clift.cast<decay> [[INDIR]]
   // CHECK: [[IMM1:%[0-9]+]] = clift.imm 1
@@ -51,5 +51,5 @@ module attributes {clift.module} {
   // CHECK: [[IMM2:%[0-9]+]] = clift.imm 0
   // CHECK: [[SUBSCRIPT2:%[0-9]+]] = clift.subscript [[CAST2]], [[IMM2]]
   // CHECK: [[ADDRESSOF2:%[0-9]+]] = clift.addressof [[SUBSCRIPT2]]
-  // CHECK: clift.yield [[ADDRESSOF2]]
+  // CHECK: clift.yield [[ADDRESSOF2]] : !clift.ptr<8 to !int32_t>
 }

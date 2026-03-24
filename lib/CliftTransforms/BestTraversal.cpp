@@ -105,11 +105,10 @@ void Traversal::dump() const {
   Log.flush();
 }
 
-/// Sentinel value for the number of elements in an implicit array created
-/// when treating a pointer as an array. This value is large enough to cover
-/// any reasonable constant offset, while avoiding overflow in
-/// `Stride * NumElements` for typical element sizes.
-static constexpr uint64_t ImplicitArrayNumElements = 1ULL << 32;
+/// Number of elements for the implicit array created when treating a pointer
+/// as an array. We use 1 as a minimal value and relax bounds checks for
+/// single-element arrays in `isCompatible` and `getExplicitArithmetic`.
+static constexpr uint64_t ImplicitArrayNumElements = 1;
 
 mlir::Type deriveBaseType(mlir::Value BasePointer) {
   using namespace mlir::clift;
@@ -151,8 +150,11 @@ static bool isCompatible(const ArrayPath &Path, llvm::APInt BaseOffset) {
     // `BaseOffset`, consuming it
     if (BaseOffset.uge(Shape.Stride)) {
 
-      // If we're jumping over the whole array, past it, we just bail out
-      if (BaseOffset.uge(Shape.Stride * Shape.NumElements)) {
+      // If we're jumping over the whole array, past it, we just bail out.
+      // For single-element arrays (used for implicit pointer-as-array), we
+      // skip this check since the array size is not meaningful.
+      if (Shape.NumElements > 1
+          and BaseOffset.uge(Shape.Stride * Shape.NumElements)) {
         return false;
       }
 
@@ -789,7 +791,10 @@ BestTraversalChooser::getExplicitArithmetic(const PointerArithmetic &Arithmetic,
     llvm::APInt IndexConstantComponent = llvm::APInt(PointerBitWidth, 0);
     if (WorkingArithmetic.Offset.BaseOffset.uge(Stride)) {
       IndexConstantComponent = WorkingArithmetic.Offset.BaseOffset.udiv(Stride);
-      revng_assert(IndexConstantComponent.ult(NumElements));
+      // For single-element arrays (used for implicit pointer-as-array), we
+      // skip bounds checking since the array size is not meaningful.
+      if (NumElements > 1)
+        revng_assert(IndexConstantComponent.ult(NumElements));
       WorkingArithmetic.Offset.BaseOffset = WorkingArithmetic.Offset.BaseOffset
                                               .urem(Stride);
     }

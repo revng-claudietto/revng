@@ -263,23 +263,41 @@ void Replacement::replace(ExpressionOpInterface PointerToReplace,
     case FieldAccessInfo::Kind::Array: {
 
       // We may need to unwrap the `ArrayType` from a `PointerType`, and emit
-      // the needed `IndirectionOp` and `Decay` cast accordingly
-      auto [ArrayType,
-            IsIndirect] = getAccessedTypeInfo<clift::ArrayType>(CurrentValue);
-      if (IsIndirect) {
-        // Add the indirection operation
-        CurrentValue = Builder.create<IndirectionOp>(PointerToReplaceLoc,
-                                                     CurrentValue);
+      // the needed `IndirectionOp` and `Decay` cast accordingly.
+      // For the pointer-as-array case (e.g., ptr<int32_t> used as an array),
+      // the current value is already a pointer to the element type, so we
+      // skip indirection and decay.
+      clift::ValueType ArrayElementType;
+      if (auto PtrType = mlir::dyn_cast<clift::PointerType>(
+            dealias(CurrentValue.getType(), /*IgnoreQualifiers=*/true))) {
+        auto Pointee = dealias(PtrType.getPointeeType(),
+                               /*IgnoreQualifiers=*/true);
+        if (auto AT = mlir::dyn_cast<clift::ArrayType>(Pointee)) {
+          // Standard case: ptr<array<N x T>> — indirection + decay
+          CurrentValue = Builder.create<IndirectionOp>(PointerToReplaceLoc,
+                                                       CurrentValue);
+          ArrayElementType = AT.getElementType();
+          auto DecayType = PointerType::get(ArrayElementType, PointerSize);
+          CurrentValue = Builder.create<CastOp>(PointerToReplaceLoc,
+                                                DecayType,
+                                                CurrentValue,
+                                                CastKind::Decay);
+        } else {
+          // Pointer-as-array case: ptr<T> used as array — the pointer is
+          // already a pointer to the element type, no decay needed
+          ArrayElementType = PtrType.getPointeeType();
+        }
+      } else {
+        // Direct array case: array<N x T> — just decay
+        auto AT = mlir::cast<clift::ArrayType>(
+          dealias(CurrentValue.getType(), /*IgnoreQualifiers=*/true));
+        ArrayElementType = AT.getElementType();
+        auto DecayType = PointerType::get(ArrayElementType, PointerSize);
+        CurrentValue = Builder.create<CastOp>(PointerToReplaceLoc,
+                                              DecayType,
+                                              CurrentValue,
+                                              CastKind::Decay);
       }
-
-      // In this situation, we need to add a `decay` cast in order to be
-      // able to perform the subscript access to the array
-      auto ArrayElementType = ArrayType.getElementType();
-      auto DecayType = PointerType::get(ArrayElementType, PointerSize);
-      CurrentValue = Builder.create<CastOp>(PointerToReplaceLoc,
-                                            DecayType,
-                                            CurrentValue,
-                                            CastKind::Decay);
 
       // Emit the `mlir::Value` representing the `Index` access.
       // We declare all the possible components (constant and variable parts)

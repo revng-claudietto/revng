@@ -86,8 +86,7 @@ Replacement Replacement::make(unsigned PointerBitWidth,
                               const PointerArithmetic &Arithmetic,
                               const Traversal &BestTraversal) {
 
-  auto BasePtrType = getPointerType(Arithmetic.BasePointer.getType());
-  auto BaseType = BasePtrType.getPointeeType();
+  auto BaseType = deriveBaseType(Arithmetic.BasePointer);
 
   // Start with an empty `Replacement` object, which will be populated in this
   // routine

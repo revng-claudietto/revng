@@ -105,6 +105,29 @@ void Traversal::dump() const {
   Log.flush();
 }
 
+/// Sentinel value for the number of elements in an implicit array created
+/// when treating a pointer as an array. This value is large enough to cover
+/// any reasonable constant offset, while avoiding overflow in
+/// `Stride * NumElements` for typical element sizes.
+static constexpr uint64_t ImplicitArrayNumElements = 1ULL << 32;
+
+mlir::Type deriveBaseType(mlir::Value BasePointer) {
+  using namespace mlir::clift;
+  auto BasePtrType = getPointerType(BasePointer.getType());
+  revng_assert(BasePtrType);
+  auto PointeeType = BasePtrType.getPointeeType();
+  auto Unwrapped = dealias(PointeeType, /*IgnoreQualifiers=*/true);
+
+  // If the pointee is a struct, union, or array, use it directly — the
+  // traversal analyzer can walk its fields and arrays
+  if (mlir::isa<StructType, UnionType, ArrayType>(Unwrapped))
+    return PointeeType;
+
+  // Otherwise, wrap in an implicit array so that pointer arithmetic like
+  // `*(p + i)` can be rewritten as `p[i]`
+  return ArrayType::get(PointeeType, ImplicitArrayNumElements);
+}
+
 namespace {
 
 // =============================================================================
@@ -660,7 +683,8 @@ private:
   /// Obtain all the explicit rewritings of the input `Arithmetic` following all
   /// the `ArrayPath`s for the `BaseType`
   std::vector<PointerArithmetic>
-  toExplicitArrayAccesses(const PointerArithmetic &Arithmetic);
+  toExplicitArrayAccesses(const PointerArithmetic &Arithmetic,
+                          mlir::Type BaseType);
 
   /// Helper which trivially spill a `PointerArithmetic` into a `Traversal`
   Traversal toTraversal(const PointerArithmetic &PA,
@@ -685,12 +709,11 @@ BestTraversalChooser::computeBestTraversal(ExpressionOpInterface
     return std::nullopt;
   }
 
-  // It may be that the `PointerToReplace` points to a `void 0` type, in that
-  // case we cannot provide a `Traversal` for sure
-  auto BasePtrType = getPointerType(Arithmetic.BasePointer.getType());
-  revng_assert(BasePtrType);
-  auto BaseType = BasePtrType.getPointeeType();
-  if (BaseType.getByteSize() == 0) {
+  // Derive the `BaseType` for the traversal analysis. For struct/union/array
+  // pointees, this is the pointee type directly. For other types (primitives,
+  // enums, pointers), we wrap in an implicit array to enable `p[i]` rewrites.
+  auto BaseType = deriveBaseType(Arithmetic.BasePointer);
+  if (mlir::cast<ValueType>(BaseType).getByteSize() == 0) {
     return std::nullopt;
   }
 
@@ -700,7 +723,7 @@ BestTraversalChooser::computeBestTraversal(ExpressionOpInterface
   PointerBitWidth = getPointerType(PointerToReplaceType).getPointerSize() * 8;
 
   std::vector<PointerArithmetic>
-    ExplicitArithmetics = toExplicitArrayAccesses(Arithmetic);
+    ExplicitArithmetics = toExplicitArrayAccesses(Arithmetic, BaseType);
 
   mlir::Type PointeeType = getPointerType(PointerToReplaceType)
                              .getPointeeType();
@@ -822,12 +845,9 @@ BestTraversalChooser::getExplicitArithmetic(const PointerArithmetic &Arithmetic,
 
 std::vector<PointerArithmetic>
 BestTraversalChooser::toExplicitArrayAccesses(const PointerArithmetic
-                                                &Arithmetic) {
+                                                &Arithmetic,
+                                              mlir::Type BaseType) {
   std::vector<PointerArithmetic> Result;
-
-  auto BasePtrType = getPointerType(Arithmetic.BasePointer.getType());
-  revng_assert(BasePtrType);
-  auto BaseType = BasePtrType.getPointeeType();
 
   // We retrieve all the `ArrayPath`s that we can build from `BaseType`
   const std::vector<ArrayPath> &ArrayPaths = TraversalAnalyzer

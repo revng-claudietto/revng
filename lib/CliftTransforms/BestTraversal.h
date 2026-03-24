@@ -123,6 +123,11 @@ struct TraversalInfo {
 /// from a `mlir::Type`
 using TraversalInfoMap = llvm::DenseMap<mlir::Type, TraversalInfo>;
 
+/// Derive the `BaseType` for the traversal analysis from the `BasePointer`.
+/// If the pointee type is a struct, union, or array, use it directly.
+/// Otherwise, wrap it in an implicit array to enable `p[i]` rewrites.
+mlir::Type deriveBaseType(mlir::Value BasePointer);
+
 /// Main entry point used to compute the `BestTraversal` from an `Expression`
 /// and PointerArithmetic`.
 std::optional<Traversal>

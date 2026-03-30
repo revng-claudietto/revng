@@ -3,6 +3,7 @@
 //
 #include <compare>
 #include <cstdint>
+#include <limits>
 #include <optional>
 
 #include "revng/ADT/RecursiveCoroutine.h"
@@ -126,9 +127,10 @@ mlir::Type deriveBaseType(mlir::Value BasePointer) {
   }
 
   // In all the other situations, wrap into an implicit array. We use
-  // `ImplicitArrayNumElements` to virtually represent a _very large_ array in
-  // order to cover any reasonable constant offset.
-  static constexpr uint64_t ImplicitArrayNumElements = 1ULL << 32;
+  // `max()` to virtually represent an unbounded array, so any constant offset
+  // is accepted by the `isCompatible` bounds check.
+  static constexpr uint64_t ImplicitArrayNumElements
+    = std::numeric_limits<uint64_t>::max();
   return ArrayType::get(PointeeType, ImplicitArrayNumElements);
 }
 
@@ -155,8 +157,9 @@ static bool isCompatible(const ArrayPath &Path, llvm::APInt BaseOffset) {
     // `BaseOffset`, consuming it
     if (BaseOffset.uge(Shape.Stride)) {
 
-      // If we're jumping over the whole array, past it, we just bail out
-      if (BaseOffset.uge(Shape.Stride * Shape.NumElements)) {
+      // If we're jumping over the whole array, past it, we just bail out.
+      // We use division to avoid overflow in `Stride * NumElements`.
+      if (BaseOffset.udiv(Shape.Stride).uge(Shape.NumElements)) {
         return false;
       }
 

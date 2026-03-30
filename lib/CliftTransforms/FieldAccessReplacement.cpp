@@ -269,18 +269,11 @@ void Replacement::replace(ExpressionOpInterface PointerToReplace,
       // We need to explicitly handle the `pointer as array` case, where
       // `CurrentValue` is not a `ptr<T>` of `ArrayType` (we virtually wrap it
       // ourselves), so the `indirection` and `cast<decay>` is not needed.
-      auto CurrentValueType = dealias(CurrentValue.getType(),
-                                      /*IgnoreQualifiers=*/true);
-      bool IsPointerAsArray = false;
-      if (auto PtrType = mlir::dyn_cast<clift::PointerType>(CurrentValueType)) {
-        auto Pointee = dealias(PtrType.getPointeeType(),
-                               /*IgnoreQualifiers=*/true);
-        IsPointerAsArray = not mlir::isa<clift::ArrayType>(Pointee);
-      }
-
-      if (IsPointerAsArray) {
-        ArrayElementType = mlir::cast<clift::PointerType>(CurrentValueType)
-                             .getPointeeType();
+      auto PtrType = getPointerType(CurrentValue.getType());
+      if (PtrType
+          and not mlir::isa<clift::ArrayType>(
+            dealias(PtrType.getPointeeType(), /*IgnoreQualifiers=*/true))) {
+        ArrayElementType = PtrType.getPointeeType();
       } else {
         // Standard path emitting `indirection` and `cast<decay>` as needed
         auto [ArrayType,

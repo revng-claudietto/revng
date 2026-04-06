@@ -499,7 +499,7 @@ getPrototypeLayout(const model::Function &Function,
     if (ABI.ABI() != CABI->ABI()) {
       std::string Error = "ABI mismatch. Passed argument indicates that "
                           "the intended ABI is `"
-                          + toString(ABI.ABI()) + "` but the function is\n"
+                          + ABI.ABI() + "` but the function is\n"
                           + toString(Function) + "\nWith prototype:\n"
                           + toString(*CABI);
       revng_abort(Error.c_str());
@@ -537,7 +537,7 @@ getPrototypeLayout(const model::Function &Function,
 
 void verifyABI(const TupleTree<model::Binary> &Binary,
                llvm::StringRef RuntimeArtifact,
-               model::ABI::Values ABI) {
+               llvm::StringRef ABI) {
   model::Architecture::Values Architecture = model::ABI::getArchitecture(ABI);
   auto Parsed = abi::runtime_test::parse(RuntimeArtifact, Architecture);
 

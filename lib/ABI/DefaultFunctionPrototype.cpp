@@ -8,10 +8,10 @@
 #include "revng/Support/EnumSwitch.h"
 
 static model::UpcastableType defaultPrototype(model::Binary &Binary,
-                                              model::ABI::Values ABI) {
+                                              llvm::StringRef ABI) {
   auto &&[Definition, Type] = Binary.makeRawFunctionDefinition();
 
-  revng_assert(ABI != model::ABI::Invalid);
+  revng_assert(!ABI.empty());
   Definition.Architecture() = model::ABI::getArchitecture(ABI);
 
   const model::ABIDefinition &Defined = model::ABIDefinition::get(ABI);
@@ -29,12 +29,12 @@ static model::UpcastableType defaultPrototype(model::Binary &Binary,
   return Type;
 }
 
-using OptionalABI = std::optional<model::ABI::Values>;
 model::UpcastableType
 abi::registerDefaultFunctionPrototype(model::Binary &Binary,
-                                      OptionalABI MaybeABI) {
-  if (!MaybeABI.has_value())
-    MaybeABI = Binary.DefaultABI();
-  revng_assert(*MaybeABI != model::ABI::Invalid);
-  return defaultPrototype(Binary, MaybeABI.value());
+                                      const std::string &ABI) {
+  std::string EffectiveABI = ABI;
+  if (EffectiveABI.empty())
+    EffectiveABI = Binary.DefaultABI();
+  revng_assert(!EffectiveABI.empty());
+  return defaultPrototype(Binary, EffectiveABI);
 }

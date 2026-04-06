@@ -893,7 +893,7 @@ Error PDBImporterTypeVisitor::visitKnownRecord(CVType &Record,
   return Error::success();
 }
 
-static inline constexpr model::ABI::Values
+static inline std::string
 getMicrosoftABI(CallingConvention CallConv, model::Architecture::Values Arch) {
   if (Arch == model::Architecture::x86_64) {
     switch (CallConv) {
@@ -902,11 +902,11 @@ getMicrosoftABI(CallingConvention CallConv, model::Architecture::Values Arch) {
     case CallingConvention::NearStdCall:
     case CallingConvention::NearSysCall:
     case CallingConvention::ThisCall:
-      return model::ABI::Microsoft_x86_64;
+      return "Microsoft_x86_64";
     case CallingConvention::NearPascal:
       revng_abort("Pascal is not currently supported");
     case CallingConvention::NearVector:
-      return model::ABI::Microsoft_x86_64_vectorcall;
+      return "Microsoft_x86_64_vectorcall";
     case CallingConvention::ClrCall:
       revng_abort("ClrCall is not currently supported");
     default:
@@ -915,38 +915,38 @@ getMicrosoftABI(CallingConvention CallConv, model::Architecture::Values Arch) {
   } else if (Arch == model::Architecture::x86) {
     switch (CallConv) {
     case CallingConvention::NearC:
-      return model::ABI::Microsoft_x86_cdecl;
+      return "Microsoft_x86_cdecl";
     case CallingConvention::NearFast:
-      return model::ABI::Microsoft_x86_fastcall;
+      return "Microsoft_x86_fastcall";
     case CallingConvention::NearStdCall:
-      return model::ABI::Microsoft_x86_stdcall;
+      return "Microsoft_x86_stdcall";
     case CallingConvention::NearSysCall:
-      return model::ABI::Microsoft_x86_stdcall;
+      return "Microsoft_x86_stdcall";
     case CallingConvention::ThisCall:
-      return model::ABI::Microsoft_x86_thiscall;
+      return "Microsoft_x86_thiscall";
     case CallingConvention::ClrCall:
       revng_abort("ClrCall is not currently supported");
     case CallingConvention::NearPascal:
       revng_abort("Pascal is not currently supported");
     case CallingConvention::NearVector:
-      return model::ABI::Microsoft_x86_vectorcall;
+      return "Microsoft_x86_vectorcall";
     default:
       revng_abort();
     }
   } else if (Arch == model::Architecture::mips
              and CallConv == CallingConvention::MipsCall) {
-    return model::ABI::SystemV_MIPS_o32;
+    return "SystemV_MIPS_o32";
   } else if (Arch == model::Architecture::mipsel
              and CallConv == CallingConvention::MipsCall) {
-    return model::ABI::SystemV_MIPSEL_o32;
+    return "SystemV_MIPSEL_o32";
   } else if (Arch == model::Architecture::arm
              and CallConv == CallingConvention::ArmCall) {
-    return model::ABI::AAPCS;
+    return "AAPCS";
   } else if (Arch == model::Architecture::aarch64
              /* and CallConv == CallingConvention::ArmCall
                 (I'm seeing CallingConvention::NearC)
              */) {
-    return model::ABI::Microsoft_AAPCS64;
+    return "Microsoft_AAPCS64";
   } else {
     revng_abort();
   }

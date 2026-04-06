@@ -2,6 +2,11 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# A modification of the 32-bit stdcall Microsoft ABI for x86 processor
+# architecture. The main difference is the fact that it allows to pass two
+# first GPR-sized non-aggregate function arguments in registers.
+# Reference: https://docs.microsoft.com/en-us/cpp/cpp/fastcall
+
 ABI: Microsoft_x86_fastcall
 
 ArgumentsArePositionBased: false

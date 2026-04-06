@@ -2,6 +2,11 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# A modification of the 32-bit fastcall Microsoft ABI for x86 processor
+# architecture. It allows using extra vector registers for passing
+# function arguments.
+# Reference: https://docs.microsoft.com/en-us/cpp/cpp/vectorcall
+
 ABI: Microsoft_x86_vectorcall
 
 ArgumentsArePositionBased: false

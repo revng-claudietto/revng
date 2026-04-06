@@ -24,10 +24,10 @@ public:
   using generated::ABIDefinition::ABIDefinition;
 
 public:
-  static const ABIDefinition &get(model::ABI::Values ABI);
+  static const ABIDefinition &get(llvm::StringRef ABI);
 
 public:
-  llvm::StringRef getName() const { return model::ABI::getName(ABI()); }
+  llvm::StringRef getName() const { return ABI(); }
   uint64_t getPointerSize() const { return model::ABI::getPointerSize(ABI()); }
   model::Architecture::Values getArchitecture() const {
     return model::ABI::getArchitecture(ABI());

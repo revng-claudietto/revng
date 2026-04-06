@@ -83,7 +83,7 @@ ToRawConverter::convert(const model::CABIFunctionDefinition &FunctionType,
   // the result type right away.
   auto &&[NewPrototype, NewType] = Binary->makeRawFunctionDefinition();
 
-  revng_assert(FunctionType.ABI() != model::ABI::Invalid);
+  revng_assert(!FunctionType.ABI().empty());
   NewPrototype.Architecture() = model::ABI::getArchitecture(FunctionType.ABI());
   model::copyMetadata(NewPrototype, FunctionType);
 

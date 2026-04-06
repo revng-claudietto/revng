@@ -11,7 +11,7 @@ bool init_unit_test();
 BOOST_AUTO_TEST_SUITE(RegisterStateDeduction);
 
 BOOST_AUTO_TEST_CASE(NoArguments) {
-  auto ABI = model::ABIDefinition::get(model::ABI::SystemZ_s390x);
+  auto ABI = model::ABIDefinition::get("SystemZ_s390x");
 
   auto Arguments = ABI.enforceArgumentRegisterState({});
   revng_check(Arguments.empty());
@@ -21,7 +21,7 @@ BOOST_AUTO_TEST_CASE(NoArguments) {
 }
 
 BOOST_AUTO_TEST_CASE(OneGPRegister) {
-  auto ABI = model::ABIDefinition::get(model::ABI::SystemZ_s390x);
+  auto ABI = model::ABIDefinition::get("SystemZ_s390x");
   const auto &GPRArguments = ABI.GeneralPurposeArgumentRegisters();
   const auto &GPRRetValues = ABI.GeneralPurposeReturnValueRegisters();
   const auto &VRArguments = ABI.VectorArgumentRegisters();
@@ -39,7 +39,7 @@ BOOST_AUTO_TEST_CASE(OneGPRegister) {
 }
 
 BOOST_AUTO_TEST_CASE(GPRArgumentsAndVRReturnValue) {
-  auto ABI = model::ABIDefinition::get(model::ABI::Microsoft_x86_64);
+  auto ABI = model::ABIDefinition::get("Microsoft_x86_64");
   const auto &GPRArguments = ABI.GeneralPurposeArgumentRegisters();
   const auto &GPRRetValues = ABI.GeneralPurposeReturnValueRegisters();
   const auto &VRArguments = ABI.VectorArgumentRegisters();
@@ -63,7 +63,7 @@ BOOST_AUTO_TEST_CASE(GPRArgumentsAndVRReturnValue) {
 }
 
 BOOST_AUTO_TEST_CASE(DeduceFirstArgument) {
-  auto ABI = model::ABIDefinition::get(model::ABI::SystemZ_s390x);
+  auto ABI = model::ABIDefinition::get("SystemZ_s390x");
   const auto &GPRArguments = ABI.GeneralPurposeArgumentRegisters();
   const auto &VRArguments = ABI.VectorArgumentRegisters();
 
@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(DeduceFirstArgument) {
 }
 
 BOOST_AUTO_TEST_CASE(DisambiguationFail) {
-  auto ABI = model::ABIDefinition::get(model::ABI::SystemZ_s390x);
+  auto ABI = model::ABIDefinition::get("SystemZ_s390x");
   const auto &GPRArguments = ABI.GeneralPurposeArgumentRegisters();
   const auto &VRArguments = ABI.VectorArgumentRegisters();
 
@@ -90,7 +90,7 @@ BOOST_AUTO_TEST_CASE(DisambiguationFail) {
 }
 
 BOOST_AUTO_TEST_CASE(UndetectableFail) {
-  auto ABI = model::ABIDefinition::get(model::ABI::SystemZ_s390x);
+  auto ABI = model::ABIDefinition::get("SystemZ_s390x");
   const auto &GPRArguments = ABI.GeneralPurposeArgumentRegisters();
   const auto &VRArguments = ABI.VectorArgumentRegisters();
 
@@ -100,7 +100,7 @@ BOOST_AUTO_TEST_CASE(UndetectableFail) {
 }
 
 BOOST_AUTO_TEST_CASE(UndetectableCornerCase) {
-  auto ABI = model::ABIDefinition::get(model::ABI::SystemZ_s390x);
+  auto ABI = model::ABIDefinition::get("SystemZ_s390x");
   const auto &GPRArguments = ABI.GeneralPurposeArgumentRegisters();
   const auto &VRArguments = ABI.VectorArgumentRegisters();
 
@@ -113,7 +113,7 @@ BOOST_AUTO_TEST_CASE(UndetectableCornerCase) {
 }
 
 BOOST_AUTO_TEST_CASE(MixedRegisters) {
-  auto ABI = model::ABIDefinition::get(model::ABI::SystemV_x86_64);
+  auto ABI = model::ABIDefinition::get("SystemV_x86_64");
   const auto &GPRArguments = ABI.GeneralPurposeArgumentRegisters();
   const auto &VRArguments = ABI.VectorArgumentRegisters();
 
@@ -130,7 +130,7 @@ BOOST_AUTO_TEST_CASE(MixedRegisters) {
 }
 
 BOOST_AUTO_TEST_CASE(AllTheRegisters) {
-  auto ABI = model::ABIDefinition::get(model::ABI::SystemV_x86_64);
+  auto ABI = model::ABIDefinition::get("SystemV_x86_64");
   const auto &GPRArguments = ABI.GeneralPurposeArgumentRegisters();
 
   model::ABIDefinition::RegisterSet Arguments(GPRArguments.begin(),
@@ -141,7 +141,7 @@ BOOST_AUTO_TEST_CASE(AllTheRegisters) {
 }
 
 BOOST_AUTO_TEST_CASE(ForbiddenRegister) {
-  auto ABI = model::ABIDefinition::get(model::ABI::SystemV_x86_64);
+  auto ABI = model::ABIDefinition::get("SystemV_x86_64");
 
   auto Register = model::Register::getLast<model::Architecture::x86_64>();
   model::ABIDefinition::RegisterSet Arguments{ Register };
@@ -150,7 +150,7 @@ BOOST_AUTO_TEST_CASE(ForbiddenRegister) {
 }
 
 BOOST_AUTO_TEST_CASE(ForbiddenRegisterFail) {
-  auto ABI = model::ABIDefinition::get(model::ABI::SystemV_x86_64);
+  auto ABI = model::ABIDefinition::get("SystemV_x86_64");
 
   auto Register = model::Register::getLast<model::Architecture::x86_64>();
   model::ABIDefinition::RegisterSet Arguments{ Register };

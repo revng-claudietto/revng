@@ -2,6 +2,10 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# Arm Architecture Procedure Call Standard (64-bit).
+# This represents the version of the ABI used by windows-on-arm.
+# Reference: https://learn.microsoft.com/cpp/build/arm64-windows-abi-conventions
+
 ABI: Microsoft_AAPCS64
 
 ArgumentsArePositionBased: false

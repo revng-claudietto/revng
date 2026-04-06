@@ -2,6 +2,9 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# The s390x ABI for SystemZ processor architecture.
+# Reference: https://github.com/IBM/s390x-abi
+
 ABI: SystemZ_s390x
 
 ArgumentsArePositionBased: true

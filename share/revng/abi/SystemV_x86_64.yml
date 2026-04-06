@@ -2,6 +2,9 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# 64-bit SystemV ABI for x86 processor architecture.
+# Reference: https://gitlab.com/x86-psABIs/x86-64-ABI
+
 ABI: SystemV_x86_64
 
 ArgumentsArePositionBased: false

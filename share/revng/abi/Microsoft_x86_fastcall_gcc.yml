@@ -2,6 +2,9 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# 32-bit Microsoft x86 fastcall ABI as implemented in GCC (subtly
+# different from the original).
+
 ABI: Microsoft_x86_fastcall_gcc
 
 ArgumentsArePositionBased: false

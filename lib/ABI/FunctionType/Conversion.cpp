@@ -155,25 +155,26 @@ private:
 std::optional<model::UpcastableType>
 tryConvertToCABI(const model::RawFunctionDefinition &FunctionType,
                  TupleTree<model::Binary> &Binary,
-                 std::optional<model::ABI::Values> MaybeABI,
+                 const std::string &MaybeABI,
                  bool UseSoftRegisterStateDeductions) {
-  if (!MaybeABI.has_value())
-    MaybeABI = Binary->DefaultABI();
+  std::string EffectiveABI = MaybeABI;
+  if (EffectiveABI.empty())
+    EffectiveABI = Binary->DefaultABI();
 
   revng_log(Log,
             "Converting a `RawFunctionDefinition` to "
             "`CABIFunctionDefinition`.");
-  revng_log(Log, "ABI: " << model::ABI::getName(MaybeABI.value()).str());
+  revng_log(Log, "ABI: " << EffectiveABI);
   revng_log(Log, "Original Type:\n" << toString(FunctionType));
   if (auto *StackType = FunctionType.stackArgumentsType())
     revng_log(Log, "Stack is:\n" << toString(*StackType));
   LoggerIndent Indentation(Log);
 
-  const model::ABIDefinition &ABI = model::ABIDefinition::get(*MaybeABI);
+  const model::ABIDefinition &ABI = model::ABIDefinition::get(EffectiveABI);
   if (!ABI.isPreliminarilyCompatibleWith(FunctionType)) {
     revng_log(Log,
               "FAIL: the function is not compatible with `"
-                << model::ABI::getName(ABI.ABI()) << "`.");
+                << ABI.ABI() << "`.");
     return std::nullopt;
   }
 
@@ -687,7 +688,7 @@ TCC::tryConvertingReturnValue(RFTReturnValues Registers) {
         revng_log(Log,
                   "No known return value type supports that many registers ("
                     << Ordered.size() << ") under "
-                    << model::ABI::getName(ABI.ABI()) << ":\n");
+                    << ABI.ABI() << ":\n");
         return std::nullopt;
       }
 
@@ -704,7 +705,7 @@ TCC::tryConvertingReturnValue(RFTReturnValues Registers) {
         revng_log(Log,
                   "The primitive return value ("
                     << Ordered.size() << " bytes) is not a valid scalar under "
-                    << model::ABI::getName(ABI.ABI()) << ":\n");
+                    << ABI.ABI() << ":\n");
         return std::nullopt;
       }
     } else {

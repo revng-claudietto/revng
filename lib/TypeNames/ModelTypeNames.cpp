@@ -337,7 +337,7 @@ std::string printFunctionPrototypeImpl(const FunctionType *Function,
 
   std::string Result;
 
-  llvm::StringRef ABIName = model::ABI::getName(CF.ABI());
+  llvm::StringRef ABIName = CF.ABI();
   Result += ptml::AttributeRegistry::getAnnotationString<"_ABI">(ABIName);
   if (Function and not Function->Attributes().empty())
     Result += getFunctionAttributesString(Function->Attributes());

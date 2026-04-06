@@ -171,7 +171,7 @@ private:
     if (not ReturnType)
       rc_return nullptr;
 
-    std::string ABIName = toString(ModelType.ABI());
+    std::string ABIName = ModelType.ABI();
 
     // TODO: consider using a dedicated `/abi/$architecture/$name` location.
     auto ABILocation = "";

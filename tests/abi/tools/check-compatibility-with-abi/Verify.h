@@ -6,4 +6,4 @@
 
 void verifyABI(const TupleTree<model::Binary> &Binary,
                llvm::StringRef RuntimeArtifact,
-               model::ABI::Values ABI);
+               llvm::StringRef ABI);

@@ -178,15 +178,15 @@ bool ABIDefinition::isPreliminarilyCompatibleWith(const RFT &Function) const {
   return true;
 }
 
-static std::string translateABIName(model::ABI::Values ABI) {
-  return "share/revng/abi/" + model::ABI::getName(ABI).str() + ".yml";
+static std::string translateABIName(llvm::StringRef ABI) {
+  return "share/revng/abi/" + ABI.str() + ".yml";
 }
 
-static std::unordered_map<model::ABI::Values, ABIDefinition> DefinitionCache;
-const ABIDefinition &ABIDefinition::get(model::ABI::Values ABI) {
-  revng_assert(ABI != model::ABI::Invalid);
+static std::unordered_map<std::string, ABIDefinition> DefinitionCache;
+const ABIDefinition &ABIDefinition::get(llvm::StringRef ABI) {
+  revng_assert(!ABI.empty());
 
-  auto CacheIterator = DefinitionCache.find(ABI);
+  auto CacheIterator = DefinitionCache.find(ABI.str());
   if (CacheIterator != DefinitionCache.end()) {
     // This ABI was already loaded, grab it from the cache.
     return CacheIterator->second;
@@ -194,24 +194,25 @@ const ABIDefinition &ABIDefinition::get(model::ABI::Values ABI) {
 
   auto MaybePath = revng::ResourceFinder.findFile(translateABIName(ABI));
   if (!MaybePath.has_value()) {
-    std::string Error = "The ABI definition is missing for: " + ::toString(ABI);
+    std::string Error = "The ABI definition is missing for: " + ABI.str();
     revng_abort(Error.c_str());
   }
 
   auto Parsed = TupleTree<ABIDefinition>::fromFile(MaybePath.value());
   if (!Parsed) {
     std::string Error = "Unable to deserialize the definition for: "
-                        + ::toString(ABI);
+                        + ABI.str();
     revng_abort(Error.c_str());
   }
 
   if (!Parsed->verify()) {
     std::string Error = "Deserialized ABI definition is not valid: "
-                        + ::toString(ABI);
+                        + ABI.str();
     revng_abort(Error.c_str());
   }
 
-  auto &&[It, Success] = DefinitionCache.try_emplace(ABI, std::move(**Parsed));
+  auto &&[It, Success] = DefinitionCache.try_emplace(ABI.str(),
+                                                      std::move(**Parsed));
   revng_assert(Success);
   return It->second;
 }

@@ -179,10 +179,11 @@ Error ELFImporter<T, HasAddend>::import(const ImporterOptions &Options) {
   parseSegments(TheELF);
 
   // Set default ABI
-  if (Model->DefaultABI() == model::ABI::Invalid) {
+  if (Model->DefaultABI().empty()) {
     revng_assert(Model->Architecture() != model::Architecture::Invalid);
-    if (auto ABI = model::ABI::getDefaultForELF(Model->Architecture())) {
-      Model->DefaultABI() = ABI.value();
+    auto ABI = model::ABI::getDefaultForELF(Model->Architecture());
+    if (!ABI.empty()) {
+      Model->DefaultABI() = ABI;
     } else {
       auto ArchName = model::Architecture::getName(Model->Architecture()).str();
       return revng::createError("Unsupported architecture for ELF: "

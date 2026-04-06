@@ -72,10 +72,11 @@ int main(int Argc, char *Argv[]) {
     auto LLVMArch = ObjectFile.makeTriple().getArch();
     Model->Architecture() = model::Architecture::fromLLVMArchitecture(LLVMArch);
 
-    if (Model->DefaultABI() == model::ABI::Invalid) {
+    if (Model->DefaultABI().empty()) {
       revng_assert(Model->Architecture() != model::Architecture::Invalid);
-      if (auto ABI = model::ABI::getDefaultForPECOFF(Model->Architecture())) {
-        Model->DefaultABI() = ABI.value();
+      auto ABI = model::ABI::getDefaultForPECOFF(Model->Architecture());
+      if (!ABI.empty()) {
+        Model->DefaultABI() = ABI;
       } else {
         auto AName = model::Architecture::getName(Model->Architecture()).str();
         revng_abort(("Unsupported architecture for PECOFF: " + AName).c_str());

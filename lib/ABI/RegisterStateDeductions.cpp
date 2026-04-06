@@ -31,7 +31,7 @@ struct DeductionImpl {
   const model::ABIDefinition &ABI;
   const llvm::StringRef ABIName;
   explicit DeductionImpl(const model::ABIDefinition &ABI) :
-    ABI(ABI), ABIName(model::ABI::getName(ABI.ABI())) {}
+    ABI(ABI), ABIName(ABI.ABI()) {}
 
   std::optional<Def::RegisterSet> arguments(Def::RegisterSet Arguments) {
     if (!ensureRegistersAreAllowed(Arguments, allowedArgumentRegisters()))

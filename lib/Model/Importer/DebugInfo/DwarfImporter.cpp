@@ -196,9 +196,10 @@ public:
       Model->Architecture() = Arch;
 
     // Set default ABI
-    if (Model->DefaultABI() == model::ABI::Invalid) {
-      if (auto ABI = model::ABI::getDefaultForELF(Model->Architecture())) {
-        Model->DefaultABI() = ABI.value();
+    if (Model->DefaultABI().empty()) {
+      auto ABI = model::ABI::getDefaultForELF(Model->Architecture());
+      if (!ABI.empty()) {
+        Model->DefaultABI() = ABI;
       } else {
         auto AName = model::Architecture::getName(Model->Architecture()).str();
         revng_abort(("Unsupported architecture for ELF: " + AName).c_str());
@@ -207,9 +208,9 @@ public:
   }
 
 private:
-  model::ABI::Values getABI(CallingConvention CC = DW_CC_normal) const {
+  std::string getABI(CallingConvention CC = DW_CC_normal) const {
     if (CC != DW_CC_normal)
-      return model::ABI::Invalid;
+      return "";
 
     // NOTE: static functions do not always follow the standard calling
     //       convention which is a problem since `CABIFunctionTypes` we generate
@@ -491,7 +492,7 @@ private:
       FunctionType.Name() = Name;
       FunctionType.ABI() = getABI();
 
-      if (FunctionType.ABI() == model::ABI::Invalid) {
+      if (FunctionType.ABI().empty()) {
         reportIgnoredDie(Die, "Unknown calling convention");
         rc_return;
       }
@@ -802,7 +803,7 @@ private:
       CC = static_cast<CallingConvention>(*MaybeCC);
     FunctionType.ABI() = getABI(CC);
 
-    if (FunctionType.ABI() == model::ABI::Invalid) {
+    if (FunctionType.ABI().empty()) {
       reportIgnoredDie(Die, "Unknown calling convention");
       return model::UpcastableType::empty();
     }

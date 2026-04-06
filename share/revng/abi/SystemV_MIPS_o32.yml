@@ -2,6 +2,9 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# The "old" 32-bit MIPS ABI for MIPS RISC processor architecture.
+# Reference: http://math-atlas.sourceforge.net/devel/assembly/mipsabi32.pdf
+
 ABI: SystemV_MIPS_o32
 
 ArgumentsArePositionBased: false

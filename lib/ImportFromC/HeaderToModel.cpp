@@ -516,8 +516,8 @@ bool DeclVisitor::VisitFunctionDecl(const clang::FunctionDecl *FD) {
                    makeTypeDefinition<CABIFunctionDefinition>();
 
   if (not IsRawFunctionType) {
-    auto TheModelABI = model::ABI::fromName(*ABI);
-    if (TheModelABI == model::ABI::Invalid) {
+    std::string TheModelABI = ABI->str();
+    if (!model::ABI::isValid(TheModelABI)) {
       Errors.emplace_back("import-from-c failed: Unknown ABI: `" + ABI->str()
                           + "`.\n");
       return false;
@@ -794,8 +794,8 @@ bool DeclVisitor::VisitFunctionPrototype(const FunctionProtoType *FP,
 
   if (not IsRawFunctionType) {
     auto &FunctionType = llvm::cast<CABIFunctionDefinition>(*NewType);
-    auto TheModelABI = model::ABI::fromName(ABI);
-    if (TheModelABI == model::ABI::Invalid) {
+    std::string TheModelABI = ABI.str();
+    if (!model::ABI::isValid(TheModelABI)) {
       Errors.emplace_back("import-from-c failed: Unknown ABI: `" + ABI.str()
                           + "`.\n");
       return false;

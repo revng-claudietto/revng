@@ -2,6 +2,10 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# Arm Architecture Procedure Call Standard.
+# The official ABI for ARM processor architecture.
+# Reference: https://github.com/ARM-software/abi-aa/releases
+
 ABI: AAPCS
 
 ArgumentsArePositionBased: false

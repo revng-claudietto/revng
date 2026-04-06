@@ -18,7 +18,7 @@ namespace abi::FunctionType {
 std::optional<model::UpcastableType>
 tryConvertToCABI(const model::RawFunctionDefinition &Function,
                  TupleTree<model::Binary> &Binary,
-                 std::optional<model::ABI::Values> ABI = std::nullopt,
+                 const std::string &ABI = "",
                  bool UseSoftRegisterStateDeductions = true);
 
 } // namespace abi::FunctionType

@@ -425,13 +425,13 @@ Function *RootAnalyzer::createTemporaryRoot(Function *TheFunction,
     // Compute preserved registers using the default prototype
     using RegisterSet = llvm::SmallSet<model::Register::Values, 16>;
     RegisterSet PreservedRegisters;
-    model::ABI::Values ABI = Model->DefaultABI();
+    const std::string &ABI = Model->DefaultABI();
     if (const auto *DefaultPrototype = Model->defaultPrototype()) {
       // TODO: don't forget to simplify the logic here if we decide to make
       //       default prototypes always available (after merging
       //       `model::ABIDefinition` back into the model).
       PreservedRegisters = getPreservedRegisters(*DefaultPrototype);
-    } else if (ABI != model::ABI::Invalid) {
+    } else if (!ABI.empty()) {
       auto &CSRs = model::ABIDefinition::get(ABI).CalleeSavedRegisters();
       PreservedRegisters.insert(CSRs.begin(), CSRs.end());
     } else {

@@ -2,6 +2,10 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# Arm Architecture Procedure Call Standard (64-bit).
+# This represents the version of the ABI used by Apple products.
+# Reference: https://developer.apple.com/documentation/xcode/writing-arm64-code-for-apple-platforms
+
 ABI: Apple_AAPCS64
 
 ArgumentsArePositionBased: false

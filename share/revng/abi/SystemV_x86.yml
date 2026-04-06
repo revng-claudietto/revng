@@ -2,6 +2,9 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# 32-bit SystemV ABI for x86 processor architecture.
+# Reference: https://gitlab.com/x86-psABIs/i386-ABI/-/tree/hjl/x86/master
+
 ABI: SystemV_x86
 
 ArgumentsArePositionBased: false

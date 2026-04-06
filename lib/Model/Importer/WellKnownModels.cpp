@@ -16,7 +16,7 @@ namespace revng::pipes {
 class WellKnownFunctionKey {
 public:
   model::Architecture::Values Architecture;
-  model::ABI::Values ABI;
+  std::string ABI;
   std::string Name;
 
 private:

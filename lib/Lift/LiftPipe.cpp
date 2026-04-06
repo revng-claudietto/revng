@@ -162,7 +162,7 @@ llvm::Error checkPrecondition(const model::Binary &Model) {
     return revng::createError("Cannot lift binary with architecture invalid.");
   }
 
-  if (Model.DefaultABI() == model::ABI::Invalid
+  if (Model.DefaultABI().empty()
       and Model.DefaultPrototype().isEmpty()) {
     return revng::createError("Cannot lift binary with neither `DefaultABI` "
                               "nor `DefaultPrototype`.");

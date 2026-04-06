@@ -148,7 +148,7 @@ public:
   inline static const std::tuple Options = {
     // Allows overriding the default ABI with a specific value when invoking
     // the analysis.
-    pipeline::Option("abi", "Invalid"),
+    pipeline::Option("abi", ""),
 
     // Allows specifying the mode of operation,
     // - safe: only convert the function if ABI belongs to the "tested" list.
@@ -175,7 +175,7 @@ public:
 };
 
 static void convertFunctionsToCABI(TupleTree<model::Binary> &Model,
-                                   model::ABI::Values ABI,
+                                   const std::string &ABI,
                                    llvm::StringRef Mode,
                                    llvm::StringRef ABIConfidence) {
   // Minimize the negative impact on binaries with ABI that is not fully
@@ -185,38 +185,39 @@ static void convertFunctionsToCABI(TupleTree<model::Binary> &Model,
   // when ABI is not considered fully tested.
   if (Mode == "safe") {
     // TODO: extend this list.
-    static constexpr std::array ABIsTheConversionIsEnabledFor = {
-      model::ABI::SystemV_x86_64,
-      model::ABI::Microsoft_x86_64,
-      model::ABI::Microsoft_x86_64_vectorcall,
-      model::ABI::SystemV_x86,
-      model::ABI::SystemV_x86_regparm_3,
-      model::ABI::SystemV_x86_regparm_2,
-      model::ABI::SystemV_x86_regparm_1,
-      model::ABI::Microsoft_x86_cdecl,
-      model::ABI::Microsoft_x86_cdecl_gcc,
-      model::ABI::Microsoft_x86_fastcall,
-      model::ABI::Microsoft_x86_fastcall_gcc,
-      model::ABI::Microsoft_x86_stdcall,
-      model::ABI::Microsoft_x86_stdcall_gcc,
-      model::ABI::Microsoft_x86_thiscall,
-      model::ABI::Microsoft_x86_vectorcall,
-      model::ABI::AAPCS,
-      model::ABI::AAPCS64
+    static const std::array<llvm::StringRef, 17>
+      ABIsTheConversionIsEnabledFor = {
+        "SystemV_x86_64",
+        "Microsoft_x86_64",
+        "Microsoft_x86_64_vectorcall",
+        "SystemV_x86",
+        "SystemV_x86_regparm_3",
+        "SystemV_x86_regparm_2",
+        "SystemV_x86_regparm_1",
+        "Microsoft_x86_cdecl",
+        "Microsoft_x86_cdecl_gcc",
+        "Microsoft_x86_fastcall",
+        "Microsoft_x86_fastcall_gcc",
+        "Microsoft_x86_stdcall",
+        "Microsoft_x86_stdcall_gcc",
+        "Microsoft_x86_thiscall",
+        "Microsoft_x86_vectorcall",
+        "AAPCS",
+        "AAPCS64"
 
-      // There are known issues
-      // model::ABI::SystemV_MIPS_o32,
-      // model::ABI::SystemV_MIPSEL_o32
+        // There are known issues
+        // "SystemV_MIPS_o32",
+        // "SystemV_MIPSEL_o32"
 
-      // Unable to reliably test: QEMU aborts
-      // model::ABI::SystemZ_s390x,
-    };
+        // Unable to reliably test: QEMU aborts
+        // "SystemZ_s390x",
+      };
     if (!llvm::is_contained(ABIsTheConversionIsEnabledFor, ABI)) {
       revng_log(Log,
                 "Analysis was aborted because the `safe` (default) mode of "
                 "the conversion was selected and the conversion for the "
                 "current ABI (`"
-                  << model::ABI::getName(ABI).str()
+                  << ABI
                   << "`) is not considered stable.");
       return;
     }
@@ -309,8 +310,8 @@ void ConvertFunctionsToCABI::run(pipeline::ExecutionContext &Context,
   auto &Model = revng::getWritableModelFromContext(Context);
   revng_assert(!TargetABI.empty());
 
-  model::ABI::Values ABI = model::ABI::fromName(TargetABI);
-  if (ABI == model::ABI::Values::Invalid) {
+  std::string ABI = TargetABI;
+  if (ABI.empty()) {
     revng_log(Log,
               "No ABI explicitly specified for the conversion, using the "
               "`Model->DefaultABI()`.");
@@ -349,9 +350,9 @@ llvm::Error ConvertFunctionsToCABI::run(Model &Model,
     return MaybeConfiguration.takeError();
 
   Configuration &Configuration = MaybeConfiguration.get();
-  model::ABI::Values ABI;
+  std::string ABI;
   if (not Configuration.ABI.empty()) {
-    ABI = model::ABI::fromName(Configuration.ABI);
+    ABI = Configuration.ABI;
   } else {
     revng_log(Log,
               "No ABI explicitly specified for the conversion, using the "

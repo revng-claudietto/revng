@@ -33,21 +33,10 @@ using namespace llvm::cl;
 
 static OptionCategory ThisToolCategory("Tool options", "");
 
-template<size_t... Indices>
-static auto packValues(std::integer_sequence<size_t, Indices...>) {
-  using namespace llvm::cl;
-  using namespace model::ABI;
-  return values(OptionEnumValue{ getName(Values(Indices)),
-                                 int(Indices),
-                                 getDescription(Values(Indices)) }...);
-}
-
-constexpr auto ABIList = std::make_index_sequence<model::ABI::Count - 1>{};
 constexpr const char *Description = "Specifies the default ABI of the binary.";
-static opt<model::ABI::Values> TargetABI("abi",
-                                         packValues(ABIList),
-                                         desc(Description),
-                                         cat(ThisToolCategory));
+static opt<std::string> TargetABI("abi",
+                                  desc(Description),
+                                  cat(ThisToolCategory));
 
 static opt<std::string> Filename(Positional,
                                  Required,

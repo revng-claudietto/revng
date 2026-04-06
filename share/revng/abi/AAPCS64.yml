@@ -2,6 +2,10 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# Arm Architecture Procedure Call Standard (64-bit).
+# The official ABI for AArch64 (ARM64) processor architecture.
+# Reference: https://github.com/ARM-software/abi-aa/releases
+
 ABI: AAPCS64
 
 ArgumentsArePositionBased: false

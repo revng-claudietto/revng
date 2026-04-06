@@ -542,10 +542,11 @@ Error PECOFFImporter::import(const ImporterOptions &Options) {
   parseDelayImportedSymbols();
 
   // Set default ABI
-  if (Model->DefaultABI() == model::ABI::Invalid) {
+  if (Model->DefaultABI().empty()) {
     revng_assert(Model->Architecture() != model::Architecture::Invalid);
-    if (auto ABI = model::ABI::getDefaultForPECOFF(Model->Architecture())) {
-      Model->DefaultABI() = ABI.value();
+    auto ABI = model::ABI::getDefaultForPECOFF(Model->Architecture());
+    if (!ABI.empty()) {
+      Model->DefaultABI() = ABI;
     } else {
       auto ArchName = model::Architecture::getName(Model->Architecture()).str();
       return revng::createError("Unsupported architecture for PECOFF: "

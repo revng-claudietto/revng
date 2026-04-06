@@ -2,6 +2,11 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# A GCC specific modification of the 32-bit SystemV ABI for x86 processor
+# architecture. It allows two first GPR-sized arguments to be passed
+# using the EAX, and ECX registers.
+# See the GCC documentation for `regparm` x86 function attribute.
+
 ABI: SystemV_x86_regparm_2
 
 ArgumentsArePositionBased: false

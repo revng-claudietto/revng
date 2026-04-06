@@ -195,9 +195,10 @@ Error MachOImporter::import() {
   auto &MachO = TheBinary.ObjectFile;
   revng_assert(Model->Architecture() != Architecture::Invalid);
 
-  if (Model->DefaultABI() == model::ABI::Invalid) {
-    if (auto ABI = model::ABI::getDefaultForMachO(Model->Architecture())) {
-      Model->DefaultABI() = ABI.value();
+  if (Model->DefaultABI().empty()) {
+    auto ABI = model::ABI::getDefaultForMachO(Model->Architecture());
+    if (!ABI.empty()) {
+      Model->DefaultABI() = ABI;
     } else {
       auto ArchName = model::Architecture::getName(Model->Architecture()).str();
       return revng::createError("Unsupported architecture for PECOFF: "

@@ -2,6 +2,11 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
+# The default 32-bit Microsoft ABI for x86 processor architecture.
+# It was intended to be compatible with SystemV_x86 but there are slight
+# differences.
+# Reference: https://docs.microsoft.com/en-us/cpp/cpp/cdecl
+
 ABI: Microsoft_x86_cdecl
 
 ArgumentsArePositionBased: false

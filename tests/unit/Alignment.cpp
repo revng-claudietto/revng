@@ -20,7 +20,7 @@ struct Expected {
   const model::ABIDefinition &ABI;
   uint64_t Alignment;
 
-  explicit Expected(model::ABI::Values ABIName, uint64_t Alignment) :
+  explicit Expected(llvm::StringRef ABIName, uint64_t Alignment) :
     ABI(model::ABIDefinition::get(ABIName)), Alignment(Alignment) {}
 };
 
@@ -31,7 +31,7 @@ void testAlignment(model::UpcastableType &&Type, const Types &...TestCases) {
     std::optional<uint64_t> TestResult = ABI.alignment(*Type);
     if (TestResult.value_or(0) != Expected) {
       std::string Error = "Alignment run failed for type:\n" + toString(Type)
-                          + "ABI (`" + toString(ABI.ABI())
+                          + "ABI (`" + ABI.ABI()
                           + "`) reports the alignment of `"
                           + printAlignment(TestResult.value_or(0)) + "`, "
                           + "while the expected value is `"
@@ -59,72 +59,72 @@ BOOST_AUTO_TEST_CASE(GenericPrimitiveTypes) {
   TupleTree<model::Binary> Binary;
 
   testAlignment(model::PrimitiveType::makeVoid(),
-                Expected(model::ABI::AAPCS64, 0),
-                Expected(model::ABI::AAPCS, 0),
-                Expected(model::ABI::SystemZ_s390x, 0),
-                Expected(model::ABI::SystemV_x86, 0));
+                Expected("AAPCS64", 0),
+                Expected("AAPCS", 0),
+                Expected("SystemZ_s390x", 0),
+                Expected("SystemV_x86", 0));
 
   testAlignment(model::PrimitiveType::makeGeneric(1),
-                Expected(model::ABI::AAPCS64, 1),
-                Expected(model::ABI::AAPCS, 1),
-                Expected(model::ABI::SystemZ_s390x, 1),
-                Expected(model::ABI::SystemV_x86, 1));
+                Expected("AAPCS64", 1),
+                Expected("AAPCS", 1),
+                Expected("SystemZ_s390x", 1),
+                Expected("SystemV_x86", 1));
 
   testAlignment(model::PrimitiveType::makeGeneric(2),
-                Expected(model::ABI::AAPCS64, 2),
-                Expected(model::ABI::AAPCS, 2),
-                Expected(model::ABI::SystemZ_s390x, 2),
-                Expected(model::ABI::SystemV_x86, 2));
+                Expected("AAPCS64", 2),
+                Expected("AAPCS", 2),
+                Expected("SystemZ_s390x", 2),
+                Expected("SystemV_x86", 2));
 
   testAlignment(model::PrimitiveType::makeGeneric(4),
-                Expected(model::ABI::AAPCS64, 4),
-                Expected(model::ABI::AAPCS, 4),
-                Expected(model::ABI::SystemZ_s390x, 4),
-                Expected(model::ABI::SystemV_x86, 4));
+                Expected("AAPCS64", 4),
+                Expected("AAPCS", 4),
+                Expected("SystemZ_s390x", 4),
+                Expected("SystemV_x86", 4));
 
   testAlignment(model::PrimitiveType::makeGeneric(8),
-                Expected(model::ABI::AAPCS64, 8),
-                Expected(model::ABI::AAPCS, 8),
-                Expected(model::ABI::SystemZ_s390x, 8),
-                Expected(model::ABI::SystemV_x86, 4));
+                Expected("AAPCS64", 8),
+                Expected("AAPCS", 8),
+                Expected("SystemZ_s390x", 8),
+                Expected("SystemV_x86", 4));
 
   testAlignment(model::PrimitiveType::makeGeneric(16),
-                Expected(model::ABI::AAPCS64, 16),
-                Expected(model::ABI::SystemZ_s390x, 8),
-                Expected(model::ABI::SystemV_x86_64, 16));
+                Expected("AAPCS64", 16),
+                Expected("SystemZ_s390x", 8),
+                Expected("SystemV_x86"_64, 16));
 }
 
 BOOST_AUTO_TEST_CASE(FloatingPointPrimitiveTypes) {
   TupleTree<model::Binary> Binary;
 
   testAlignment(model::PrimitiveType::makeFloat(2),
-                Expected(model::ABI::AAPCS64, 2),
-                Expected(model::ABI::AAPCS, 2),
-                Expected(model::ABI::SystemV_x86_64, 2));
+                Expected("AAPCS64", 2),
+                Expected("AAPCS", 2),
+                Expected("SystemV_x86"_64, 2));
 
   testAlignment(model::PrimitiveType::makeFloat(4),
-                Expected(model::ABI::AAPCS64, 4),
-                Expected(model::ABI::AAPCS, 4),
-                Expected(model::ABI::SystemZ_s390x, 4),
-                Expected(model::ABI::SystemV_x86, 4));
+                Expected("AAPCS64", 4),
+                Expected("AAPCS", 4),
+                Expected("SystemZ_s390x", 4),
+                Expected("SystemV_x86", 4));
 
   testAlignment(model::PrimitiveType::makeFloat(8),
-                Expected(model::ABI::AAPCS64, 8),
-                Expected(model::ABI::AAPCS, 8),
-                Expected(model::ABI::SystemZ_s390x, 8),
-                Expected(model::ABI::SystemV_x86, 4));
+                Expected("AAPCS64", 8),
+                Expected("AAPCS", 8),
+                Expected("SystemZ_s390x", 8),
+                Expected("SystemV_x86", 4));
 
   testAlignment(model::PrimitiveType::makeFloat(16),
-                Expected(model::ABI::AAPCS64, 16),
-                Expected(model::ABI::SystemZ_s390x, 8),
-                Expected(model::ABI::SystemV_x86, 16),
-                Expected(model::ABI::SystemV_x86_64, 16));
+                Expected("AAPCS64", 16),
+                Expected("SystemZ_s390x", 8),
+                Expected("SystemV_x86", 16),
+                Expected("SystemV_x86"_64, 16));
 }
 
-constexpr std::array TestedABIs{ model::ABI::AAPCS64,
-                                 model::ABI::AAPCS,
-                                 model::ABI::SystemZ_s390x,
-                                 model::ABI::SystemV_x86 };
+constexpr std::array TestedABIs{ "AAPCS64",
+                                 "AAPCS",
+                                 "SystemZ_s390x",
+                                 "SystemV_x86" };
 
 static void compareTypeAlignments(const model::ABIDefinition &ABI,
                                   const model::UpcastableType &LHS,
@@ -134,7 +134,7 @@ static void compareTypeAlignments(const model::ABIDefinition &ABI,
   if (Left != Right) {
     std::string Error = "Alignment comparison run failed for types:\n"
                         + toString(LHS) + "and\n" + toString(RHS) + "ABI (`"
-                        + toString(ABI.ABI()) + "`) reports the alignment of `"
+                        + ABI.ABI() + "`) reports the alignment of `"
                         + printAlignment(Left.value_or(0))
                         + "` for the first one, and `"
                         + printAlignment(Right.value_or(0))
@@ -153,7 +153,7 @@ BOOST_AUTO_TEST_CASE(RemainingPrimitiveTypes) {
     model::PrimitiveKind::PointerOrNumber
   };
 
-  for (model::ABI::Values ABIName : TestedABIs) {
+  for (llvm::StringRef ABIName : TestedABIs) {
     const model::ABIDefinition &ABI = model::ABIDefinition::get(ABIName);
     for (const auto &PKind : RemainingTypes)
       for (uint64_t Size = 1; Size <= 16; Size *= 2)
@@ -176,7 +176,7 @@ BOOST_AUTO_TEST_CASE(UnionTypes) {
   auto LongDouble = model::PrimitiveType::makeFloat(16);
   auto WeirdLD = model::PrimitiveType::makeFloat(12);
 
-  for (model::ABI::Values ABIName : TestedABIs) {
+  for (llvm::StringRef ABIName : TestedABIs) {
     const model::ABIDefinition &ABI = model::ABIDefinition::get(ABIName);
 
     auto &&[SimpleDefinition, Simple] = Binary->makeUnionDefinition();
@@ -244,7 +244,7 @@ BOOST_AUTO_TEST_CASE(StructTypes) {
   auto LongDouble = model::PrimitiveType::makeFloat(16);
   auto WeirdLD = model::PrimitiveType::makeFloat(12);
 
-  for (model::ABI::Values ABIName : TestedABIs) {
+  for (llvm::StringRef ABIName : TestedABIs) {
     const model::ABIDefinition &ABI = model::ABIDefinition::get(ABIName);
 
     auto &&[SimpleDefinition, Simple] = Binary->makeStructDefinition();
@@ -307,7 +307,7 @@ BOOST_AUTO_TEST_CASE(ArraysAndPointers) {
   auto Int64 = model::PrimitiveType::makeSigned(8);
   auto Double = model::PrimitiveType::makeFloat(8);
 
-  for (model::ABI::Values ABIName : TestedABIs) {
+  for (llvm::StringRef ABIName : TestedABIs) {
     const model::ABIDefinition &ABI = model::ABIDefinition::get(ABIName);
 
     auto IntPointer = model::PointerType::make(Int32.copy(),

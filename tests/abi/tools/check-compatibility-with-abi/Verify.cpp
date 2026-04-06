@@ -4,7 +4,7 @@
 
 #include <algorithm>
 
-#include "revng/ABI/Definition.h"
+#include "revng/Model/ABIDefinition.h"
 #include "revng/ABI/FunctionType/Layout.h"
 #include "revng/Model/Binary.h"
 
@@ -13,7 +13,7 @@
 
 struct VerificationHelper {
   const model::Architecture::Values Architecture;
-  const abi::Definition &ABI;
+  const model::ABIDefinition &ABI;
   const bool IsLittleEndian;
 
 public:
@@ -25,7 +25,7 @@ private:
 
 public:
   VerificationHelper(model::Architecture::Values Architecture,
-                     const abi::Definition &ABI,
+                     const model::ABIDefinition &ABI,
                      const bool IsLittleEndian) :
     Architecture(Architecture), ABI(ABI), IsLittleEndian(IsLittleEndian) {}
 
@@ -119,7 +119,7 @@ VH::dropInterArgumentPadding(llvm::ArrayRef<std::byte> Bytes) const {
       auto PaddingSize = Argument.Stack->Offset - PreviousArgumentEndsAt;
       if (PaddingSize > ABI.getPointerSize()) {
         // TODO: this check can be improved quite a bit by taking
-        // `abi::Definition::ScalarTypes()` into the account.
+        // `model::ABIDefinition::ScalarTypes()` into the account.
         fail("Padding exceeds the register size.\n"
              "Current argument is expected at offset "
              + std::to_string(Argument.Stack->Offset)
@@ -494,7 +494,7 @@ void VH::returnValue(const abi::runtime_test::ReturnValueTest &Test) const {
 
 static abi::FunctionType::Layout
 getPrototypeLayout(const model::Function &Function,
-                   const abi::Definition &ABI) {
+                   const model::ABIDefinition &ABI) {
   if (const auto *CABI = Function.cabiPrototype()) {
     if (ABI.ABI() != CABI->ABI()) {
       std::string Error = "ABI mismatch. Passed argument indicates that "
@@ -544,7 +544,7 @@ void verifyABI(const TupleTree<model::Binary> &Binary,
   llvm::StringRef ArchitectureName = model::Architecture::getName(Architecture);
   revng_check(ArchitectureName == Parsed.Architecture);
 
-  const abi::Definition &Def = abi::Definition::get(ABI);
+  const model::ABIDefinition &Def = model::ABIDefinition::get(ABI);
   VerificationHelper Helper{ Architecture, Def, Parsed.IsLittleEndian };
   size_t ArgumentTestCount = 0, ReturnValueTestCount = 0;
   for (auto &Function : Binary->Functions()) {

@@ -8,7 +8,7 @@
 
 #include "llvm/ADT/STLExtras.h"
 
-#include "revng/ABI/Definition.h"
+#include "revng/Model/ABIDefinition.h"
 #include "revng/ADT/STLExtras.h"
 #include "revng/Model/Binary.h"
 
@@ -201,7 +201,7 @@ public:
 
 inline std::span<const model::Register::Values>
 calleeSavedRegisters(const model::CABIFunctionDefinition &Prototype) {
-  return abi::Definition::get(Prototype.ABI()).CalleeSavedRegisters();
+  return model::ABIDefinition::get(Prototype.ABI()).CalleeSavedRegisters();
 }
 
 inline std::span<const model::Register::Values>

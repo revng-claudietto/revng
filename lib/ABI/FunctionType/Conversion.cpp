@@ -4,7 +4,7 @@
 
 #include "llvm/ADT/SmallSet.h"
 
-#include "revng/ABI/Definition.h"
+#include "revng/Model/ABIDefinition.h"
 #include "revng/ABI/FunctionType/Conversion.h"
 #include "revng/ABI/FunctionType/Support.h"
 #include "revng/ADT/STLExtras.h"
@@ -33,14 +33,14 @@ public:
   };
 
 private:
-  const abi::Definition &ABI;
+  const model::ABIDefinition &ABI;
   model::TypeBucket Bucket;
   const bool UseSoftRegisterStateDeductions = false;
 
-  abi::Definition::AlignmentCache AlignmentCache = {};
+  model::ABIDefinition::AlignmentCache AlignmentCache = {};
 
 public:
-  ToCABIConverter(const abi::Definition &ABI,
+  ToCABIConverter(const model::ABIDefinition &ABI,
                   model::Binary &Binary,
                   const bool UseSoftRegisterStateDeductions) :
     ABI(ABI),
@@ -169,7 +169,7 @@ tryConvertToCABI(const model::RawFunctionDefinition &FunctionType,
     revng_log(Log, "Stack is:\n" << toString(*StackType));
   LoggerIndent Indentation(Log);
 
-  const abi::Definition &ABI = abi::Definition::get(*MaybeABI);
+  const model::ABIDefinition &ABI = model::ABIDefinition::get(*MaybeABI);
   if (!ABI.isPreliminarilyCompatibleWith(FunctionType)) {
     revng_log(Log,
               "FAIL: the function is not compatible with `"
@@ -230,7 +230,7 @@ TCC::tryConvertingRegisterArguments(RFTArguments Registers) {
   auto Unwrap = std::views::transform([](const model::NamedTypedRegister &R) {
     return R.Location();
   });
-  auto Deduced = Registers | Unwrap | revng::to<abi::Definition::RegisterSet>();
+  auto Deduced = Registers | Unwrap | revng::to<model::ABIDefinition::RegisterSet>();
 
   if (!UseSoftRegisterStateDeductions)
     Deduced = ABI.enforceArgumentRegisterState(std::move(Deduced));
@@ -282,7 +282,7 @@ struct ArgumentProperties {
 };
 
 /// \note: if `Previous` is `std::nullopt`, it means this is the first argument.
-static bool verifyAlignment(const abi::Definition &ABI,
+static bool verifyAlignment(const model::ABIDefinition &ABI,
                             const ArgumentProperties &Current,
                             const std::optional<ArgumentProperties> &Previous) {
   revng_log(Log,
@@ -355,7 +355,7 @@ bool canBeNext(ArgumentDistributor &Distributor,
                const ModelType &CurrentType,
                const ArgumentProperties &Current,
                const std::optional<ArgumentProperties> &Previous) {
-  const abi::Definition &ABI = Distributor.ABI;
+  const model::ABIDefinition &ABI = Distributor.ABI;
 
   revng_log(Log,
             "Checking whether the argument #"
@@ -656,7 +656,7 @@ TCC::tryConvertingReturnValue(RFTReturnValues Registers) {
   auto Unwrap = std::views::transform([](const model::NamedTypedRegister &R) {
     return R.Location();
   });
-  auto Deduced = Registers | Unwrap | revng::to<abi::Definition::RegisterSet>();
+  auto Deduced = Registers | Unwrap | revng::to<model::ABIDefinition::RegisterSet>();
 
   if (!UseSoftRegisterStateDeductions)
     Deduced = ABI.enforceReturnValueRegisterState(std::move(Deduced));

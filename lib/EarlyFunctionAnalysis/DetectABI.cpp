@@ -16,7 +16,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/Support/GraphWriter.h"
 
-#include "revng/ABI/Definition.h"
+#include "revng/Model/ABIDefinition.h"
 #include "revng/ABI/FunctionType/Layout.h"
 #include "revng/ADT/Queue.h"
 #include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
@@ -590,12 +590,12 @@ void DetectABI::applyABIDeductions() {
   if (ABIEnforcement == NoABIEnforcement)
     return;
 
-  auto ABI = abi::Definition::get(Binary->DefaultABI());
+  auto ABI = model::ABIDefinition::get(Binary->DefaultABI());
   for (const model::Function &Function : Binary->Functions()) {
     auto &Summary = Oracle.getLocalFunction(Function.Entry());
 
-    abi::Definition::RegisterSet Arguments;
-    abi::Definition::RegisterSet RValues;
+    model::ABIDefinition::RegisterSet Arguments;
+    model::ABIDefinition::RegisterSet RValues;
     model::Architecture::Values Architecture = Binary->Architecture();
     for (const auto &Register : model::Architecture::registers(Architecture)) {
       auto Name = model::Register::getCSVName(Register);

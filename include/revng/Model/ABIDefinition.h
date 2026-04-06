@@ -6,8 +6,7 @@
 
 #include <vector>
 
-#include "revng/ABI/FunctionType/Support.h"
-#include "revng/ABI/ScalarType.h"
+#include "revng/Model/ScalarType.h"
 #include "revng/ADT/SortedVector.h"
 #include "revng/Model/ABI.h"
 #include "revng/Model/RawFunctionDefinition.h"
@@ -16,16 +15,16 @@
 #include "revng/TupleTree/TupleTree.h"
 #include "revng/TupleTree/TupleTreeDiff.h"
 
-#include "revng/ABI/Generated/Early/Definition.h"
+#include "revng/Model/Generated/Early/ABIDefinition.h"
 
-namespace abi {
+namespace model {
 
-class Definition : public generated::Definition {
+class ABIDefinition : public generated::ABIDefinition {
 public:
-  using generated::Definition::Definition;
+  using generated::ABIDefinition::ABIDefinition;
 
 public:
-  static const Definition &get(model::ABI::Values ABI);
+  static const ABIDefinition &get(model::ABI::Values ABI);
 
 public:
   llvm::StringRef getName() const { return model::ABI::getName(ABI()); }
@@ -253,10 +252,20 @@ public:
   ///
   /// \return The size of the argument with the padding.
   uint64_t paddedSizeOnStack(uint64_t Size) const {
-    return FunctionType::paddedSizeOnStack(Size, MinimumStackArgumentSize());
+    uint64_t RegisterSize = MinimumStackArgumentSize();
+    revng_assert(llvm::isPowerOf2_64(RegisterSize));
+    revng_assert(Size != 0, "0-sized stack entries are not supported.");
+
+    if (Size <= RegisterSize)
+      return RegisterSize;
+
+    Size += RegisterSize - 1;
+    Size &= ~(RegisterSize - 1);
+
+    return Size;
   }
 };
 
-} // namespace abi
+} // namespace model
 
-#include "revng/ABI/Generated/Late/Definition.h"
+#include "revng/Model/Generated/Late/ABIDefinition.h"

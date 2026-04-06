@@ -5,6 +5,7 @@
 # Define revngModel library
 revng_add_analyses_library_internal(
   revngModel
+  ABIDefinition.cpp
   Binary.cpp
   CommonTypeMethods.cpp
   FunctionTags.cpp

@@ -3,7 +3,7 @@
 //
 
 #include "revng/ABI/DefaultFunctionPrototype.h"
-#include "revng/ABI/Definition.h"
+#include "revng/Model/ABIDefinition.h"
 #include "revng/ABI/FunctionType/Support.h"
 #include "revng/Support/EnumSwitch.h"
 
@@ -14,7 +14,7 @@ static model::UpcastableType defaultPrototype(model::Binary &Binary,
   revng_assert(ABI != model::ABI::Invalid);
   Definition.Architecture() = model::ABI::getArchitecture(ABI);
 
-  const abi::Definition &Defined = abi::Definition::get(ABI);
+  const model::ABIDefinition &Defined = model::ABIDefinition::get(ABI);
   for (const auto &Register : Defined.GeneralPurposeArgumentRegisters())
     Definition.addArgument(Register, model::PrimitiveType::make(Register));
 

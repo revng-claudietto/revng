@@ -6,7 +6,7 @@
 
 #include "llvm/ADT/ArrayRef.h"
 
-#include "revng/ABI/Definition.h"
+#include "revng/Model/ABIDefinition.h"
 #include "revng/Model/Binary.h"
 
 static Logger Log("abi-register-state-deduction");
@@ -16,7 +16,7 @@ static Logger Log("abi-register-state-deduction");
 /// Returns `0` if no registers from the list were mentioned.
 static size_t
 findLastUsedIndex(llvm::ArrayRef<model::Register::Values> Registers,
-                  const abi::Definition::RegisterSet &State) {
+                  const model::ABIDefinition::RegisterSet &State) {
   for (size_t Index = Registers.size(); Index != 0; --Index)
     if (State.contains(Registers[Index - 1]))
       return Index;
@@ -24,13 +24,13 @@ findLastUsedIndex(llvm::ArrayRef<model::Register::Values> Registers,
   return 0;
 }
 
-using Def = abi::Definition;
+using Def = model::ABIDefinition;
 
 template<bool EnforceABIConformance>
 struct DeductionImpl {
-  const abi::Definition &ABI;
+  const model::ABIDefinition &ABI;
   const llvm::StringRef ABIName;
-  explicit DeductionImpl(const abi::Definition &ABI) :
+  explicit DeductionImpl(const model::ABIDefinition &ABI) :
     ABI(ABI), ABIName(model::ABI::getName(ABI.ABI())) {}
 
   std::optional<Def::RegisterSet> arguments(Def::RegisterSet Arguments) {
@@ -243,24 +243,24 @@ private:
 using SoftDeduction = DeductionImpl<false>;
 using StrictDeduction = DeductionImpl<true>;
 
-std::optional<abi::Definition::RegisterSet>
+std::optional<model::ABIDefinition::RegisterSet>
 Def::tryDeducingArgumentRegisterState(RegisterSet &&Arguments) const {
   return SoftDeduction(*this).arguments(std::move(Arguments));
 }
 
-std::optional<abi::Definition::RegisterSet>
+std::optional<model::ABIDefinition::RegisterSet>
 Def::tryDeducingReturnValueRegisterState(RegisterSet &&ReturnValues) const {
   return SoftDeduction(*this).returnValues(std::move(ReturnValues));
 }
 
-abi::Definition::RegisterSet
+model::ABIDefinition::RegisterSet
 Def::enforceArgumentRegisterState(RegisterSet &&Arguments) const {
   auto Result = StrictDeduction(*this).arguments(std::move(Arguments));
   revng_assert(Result != std::nullopt);
   return Result.value();
 }
 
-abi::Definition::RegisterSet
+model::ABIDefinition::RegisterSet
 Def::enforceReturnValueRegisterState(RegisterSet &&ReturnValues) const {
   auto Result = StrictDeduction(*this).returnValues(std::move(ReturnValues));
   revng_assert(Result != std::nullopt);

@@ -6,7 +6,7 @@
 
 #include "llvm/ADT/SmallVector.h"
 
-#include "revng/ABI/Definition.h"
+#include "revng/Model/ABIDefinition.h"
 #include "revng/Model/Register.h"
 
 namespace abi::FunctionType {
@@ -35,7 +35,7 @@ struct DistributedValue {
 
   /// The size of the piece of the argument placed on the stack.
   /// It has to be equal to `0` or `this->SizeWithPadding` for any ABI for which
-  /// `abi::Definition::ArgumentsCanBeSplitBetweenRegistersAndStack()` returns
+  /// `model::ABIDefinition::ArgumentsCanBeSplitBetweenRegistersAndStack()` returns
   /// `false`.
   /// For all the other ABIs, it has to be an integer value, such that
   /// `(0 <= SizeOnStack <= this->Size + this->PostPaddingSize)` is true.
@@ -77,7 +77,7 @@ using RegisterSpan = std::span<const model::Register::Values>;
 
 class ValueDistributor {
 public:
-  const abi::Definition &ABI;
+  const model::ABIDefinition &ABI;
   uint64_t UsedGeneralPurposeRegisterCount = 0;
   uint64_t UsedVectorRegisterCount = 0;
   uint64_t UsedStackOffset = 0;
@@ -101,7 +101,7 @@ public:
   }
 
 protected:
-  explicit ValueDistributor(const abi::Definition &ABI) :
+  explicit ValueDistributor(const model::ABIDefinition &ABI) :
     ABI(ABI), UsedStackOffset(ABI.UnusedStackArgumentBytes()) {
 
     revng_assert(ABI.verify());
@@ -118,7 +118,7 @@ protected:
   /// \param AllowedRegisterLimit The maximum number of registers available to
   ///        use for the current argument.
   /// \param ForbidSplittingBetweenRegistersAndStack Allows overriding the
-  ///        \ref abi::Definition::ArgumentsCanBeSplitBetweenRegistersAndStack
+  ///        \ref model::ABIDefinition::ArgumentsCanBeSplitBetweenRegistersAndStack
   ///        of the ABI for the sake of current distribution. This should be set
   ///        to `true` when return value is being distributed.
   ///
@@ -142,7 +142,7 @@ protected:
              uint64_t OccupiedRegisterCount,
              uint64_t AllowedRegisterLimit,
              bool ForbidSplittingBetweenRegistersAndStack) {
-    abi::Definition::AlignmentCache Cache;
+    model::ABIDefinition::AlignmentCache Cache;
     return distribute(*Type.size(),
                       *ABI.alignment(Type, Cache),
                       *ABI.hasNaturalAlignment(Type, Cache),
@@ -155,7 +155,7 @@ protected:
 
 class ArgumentDistributor : public ValueDistributor {
 public:
-  explicit ArgumentDistributor(const abi::Definition &ABI) :
+  explicit ArgumentDistributor(const model::ABIDefinition &ABI) :
     ValueDistributor(ABI){};
 
   void addShadowPointerReturnValueLocationArgument() {
@@ -180,7 +180,7 @@ public:
     if (ABI.ArgumentsArePositionBased()) {
       return positionBased(Type.isFloatPrimitive(), *Type.size());
     } else {
-      abi::Definition::AlignmentCache Cache;
+      model::ABIDefinition::AlignmentCache Cache;
       uint64_t Alignment = *ABI.alignment(Type, Cache);
       bool IsNatural = *ABI.hasNaturalAlignment(Type, Cache);
       return nonPositionBased(Type.isScalar(),
@@ -227,7 +227,7 @@ private:
 
 class ReturnValueDistributor : public ValueDistributor {
 public:
-  explicit ReturnValueDistributor(const abi::Definition &ABI) :
+  explicit ReturnValueDistributor(const model::ABIDefinition &ABI) :
     ValueDistributor(ABI){};
 
   DistributedValue returnValue(const model::Type &ReturnValueType);

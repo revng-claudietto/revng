@@ -58,7 +58,7 @@ getArchitecture(model::ABI::Values V) {
 /// A workaround for the model not having dedicated `mipsel` registers.
 ///
 /// The returned architecture is the one registers of which is used inside
-/// the `abi::Definition`.
+/// the `model::ABIDefinition`.
 inline constexpr model::Architecture::Values
 getRegisterArchitecture(model::ABI::Values V) {
   if (V == model::ABI::SystemV_MIPSEL_o32)

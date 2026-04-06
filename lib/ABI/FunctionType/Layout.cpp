@@ -5,7 +5,7 @@
 #include <span>
 #include <unordered_set>
 
-#include "revng/ABI/Definition.h"
+#include "revng/Model/ABIDefinition.h"
 #include "revng/ABI/FunctionType/Layout.h"
 #include "revng/ABI/FunctionType/Support.h"
 #include "revng/ADT/SmallMap.h"
@@ -27,10 +27,10 @@ private:
   using CFTArguments = decltype(std::declval<CFT>().Arguments());
 
 private:
-  const abi::Definition &ABI;
+  const model::ABIDefinition &ABI;
 
 public:
-  explicit ToRawConverter(const abi::Definition &ABI) : ABI(ABI) {
+  explicit ToRawConverter(const model::ABIDefinition &ABI) : ABI(ABI) {
     revng_assert(ABI.verify());
   }
 
@@ -382,12 +382,12 @@ ToRawConverter::distributeArguments(CFTArguments Arguments,
 model::UpcastableType
 convertToRaw(const model::CABIFunctionDefinition &FunctionType,
              TupleTree<model::Binary> &Binary) {
-  ToRawConverter ToRaw(abi::Definition::get(FunctionType.ABI()));
+  ToRawConverter ToRaw(model::ABIDefinition::get(FunctionType.ABI()));
   return ToRaw.convert(FunctionType, Binary);
 }
 
 Layout::Layout(const model::CABIFunctionDefinition &Function) {
-  const abi::Definition &ABI = abi::Definition::get(Function.ABI());
+  const model::ABIDefinition &ABI = model::ABIDefinition::get(Function.ABI());
   ToRawConverter Converter(ABI);
 
   //
@@ -651,7 +651,7 @@ Layout::returnValueRegisters() const {
 }
 
 uint64_t finalStackOffset(const model::CABIFunctionDefinition &Function) {
-  const abi::Definition &ABI = abi::Definition::get(Function.ABI());
+  const model::ABIDefinition &ABI = model::ABIDefinition::get(Function.ABI());
   ToRawConverter Helper(ABI);
 
   return Helper.finalStackOffset(ABI.CalleeIsResponsibleForStackCleanup() ?
@@ -663,7 +663,7 @@ UsedRegisters usedRegisters(const model::CABIFunctionDefinition &Function) {
   UsedRegisters Result;
 
   // Ready the return value register data.
-  const abi::Definition &ABI = abi::Definition::get(Function.ABI());
+  const model::ABIDefinition &ABI = model::ABIDefinition::get(Function.ABI());
   DistributedValue RV;
   if (!Function.ReturnType().isEmpty())
     RV = ToRawConverter(ABI).distributeReturnValue(*Function.ReturnType());

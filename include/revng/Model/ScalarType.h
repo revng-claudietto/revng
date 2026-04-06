@@ -6,9 +6,9 @@
 
 #include <cstdint>
 
-#include "revng/ABI/Generated/Early/ScalarType.h"
+#include "revng/Model/Generated/Early/ScalarType.h"
 
-namespace abi {
+namespace model {
 
 class ScalarType : public generated::ScalarType {
 public:
@@ -20,6 +20,6 @@ public:
   }
 };
 
-} // namespace abi
+} // namespace model
 
-#include "revng/ABI/Generated/Late/ScalarType.h"
+#include "revng/Model/Generated/Late/ScalarType.h"

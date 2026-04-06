@@ -176,7 +176,7 @@ public:
   /// Use this when you need to access/modify the existing prototype,
   /// and \ref DefaultPrototype() when you need to assign a new one.
   model::TypeDefinition *defaultPrototype() {
-    // TODO: after `abi::Definition` is merged back into the model,
+    // TODO: after `model::ABIDefinition` is merged back into the model,
     //       the prototype will always be present, so this should return
     //       a reference instead.
     if (DefaultPrototype().isEmpty())
@@ -189,7 +189,7 @@ public:
   /// Use this when you need to access/modify the existing prototype,
   /// and \ref DefaultPrototype() when you need to assign a new one.
   const model::TypeDefinition *defaultPrototype() const {
-    // TODO: after `abi::Definition` is merged back into the model,
+    // TODO: after `model::ABIDefinition` is merged back into the model,
     //       the prototype will always be present, so this should return
     //       a reference instead.
     if (DefaultPrototype().isEmpty())

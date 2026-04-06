@@ -8,7 +8,7 @@
 bool init_unit_test();
 #include "boost/test/unit_test.hpp"
 
-#include "revng/ABI/Definition.h"
+#include "revng/Model/ABIDefinition.h"
 #include "revng/ADT/Concepts.h"
 #include "revng/Model/Binary.h"
 
@@ -17,11 +17,11 @@ static std::string printAlignment(uint64_t Alignment) {
 }
 
 struct Expected {
-  const abi::Definition &ABI;
+  const model::ABIDefinition &ABI;
   uint64_t Alignment;
 
   explicit Expected(model::ABI::Values ABIName, uint64_t Alignment) :
-    ABI(abi::Definition::get(ABIName)), Alignment(Alignment) {}
+    ABI(model::ABIDefinition::get(ABIName)), Alignment(Alignment) {}
 };
 
 template<typename... Types>
@@ -41,14 +41,14 @@ void testAlignment(model::UpcastableType &&Type, const Types &...TestCases) {
   }
 }
 
-static bool ABIhasIntsOfSizes(const abi::Definition &ABI,
+static bool ABIhasIntsOfSizes(const model::ABIDefinition &ABI,
                               std::initializer_list<uint64_t> Values) {
   return std::ranges::all_of(Values, [&ABI](uint64_t Value) {
     return ABI.ScalarTypes().contains(Value);
   });
 }
 
-static bool ABIhasFloatsOfSizes(const abi::Definition &ABI,
+static bool ABIhasFloatsOfSizes(const model::ABIDefinition &ABI,
                                 std::initializer_list<uint64_t> Values) {
   return std::ranges::all_of(Values, [&ABI](uint64_t Value) {
     return ABI.FloatingPointScalarTypes().contains(Value);
@@ -126,7 +126,7 @@ constexpr std::array TestedABIs{ model::ABI::AAPCS64,
                                  model::ABI::SystemZ_s390x,
                                  model::ABI::SystemV_x86 };
 
-static void compareTypeAlignments(const abi::Definition &ABI,
+static void compareTypeAlignments(const model::ABIDefinition &ABI,
                                   const model::UpcastableType &LHS,
                                   const model::UpcastableType &RHS) {
   std::optional<uint64_t> Left = ABI.alignment(*LHS);
@@ -154,7 +154,7 @@ BOOST_AUTO_TEST_CASE(RemainingPrimitiveTypes) {
   };
 
   for (model::ABI::Values ABIName : TestedABIs) {
-    const abi::Definition &ABI = abi::Definition::get(ABIName);
+    const model::ABIDefinition &ABI = model::ABIDefinition::get(ABIName);
     for (const auto &PKind : RemainingTypes)
       for (uint64_t Size = 1; Size <= 16; Size *= 2)
         if (ABIhasIntsOfSizes(ABI, { Size }))
@@ -177,7 +177,7 @@ BOOST_AUTO_TEST_CASE(UnionTypes) {
   auto WeirdLD = model::PrimitiveType::makeFloat(12);
 
   for (model::ABI::Values ABIName : TestedABIs) {
-    const abi::Definition &ABI = abi::Definition::get(ABIName);
+    const model::ABIDefinition &ABI = model::ABIDefinition::get(ABIName);
 
     auto &&[SimpleDefinition, Simple] = Binary->makeUnionDefinition();
     SimpleDefinition.addField(Int32.copy());
@@ -245,7 +245,7 @@ BOOST_AUTO_TEST_CASE(StructTypes) {
   auto WeirdLD = model::PrimitiveType::makeFloat(12);
 
   for (model::ABI::Values ABIName : TestedABIs) {
-    const abi::Definition &ABI = abi::Definition::get(ABIName);
+    const model::ABIDefinition &ABI = model::ABIDefinition::get(ABIName);
 
     auto &&[SimpleDefinition, Simple] = Binary->makeStructDefinition();
     SimpleDefinition.addField(0, Int32.copy());
@@ -308,7 +308,7 @@ BOOST_AUTO_TEST_CASE(ArraysAndPointers) {
   auto Double = model::PrimitiveType::makeFloat(8);
 
   for (model::ABI::Values ABIName : TestedABIs) {
-    const abi::Definition &ABI = abi::Definition::get(ABIName);
+    const model::ABIDefinition &ABI = model::ABIDefinition::get(ABIName);
 
     auto IntPointer = model::PointerType::make(Int32.copy(),
                                                ABI.getPointerSize());

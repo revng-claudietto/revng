@@ -5,7 +5,7 @@
 #include <span>
 #include <unordered_map>
 
-#include "revng/ABI/Definition.h"
+#include "revng/Model/ABIDefinition.h"
 #include "revng/ADT/Concepts.h"
 #include "revng/Model/ABI.h"
 #include "revng/Model/Binary.h"
@@ -41,7 +41,7 @@ static bool isVectorRegister(model::Register::Values Register) {
 /// see the `static_assert` that invokes it in \ref distributeArguments
 ///
 /// \return `true` if the ABI is valid, `false` otherwise.
-static bool verifyReturnValueLocation(const abi::Definition &D) {
+static bool verifyReturnValueLocation(const model::ABIDefinition &D) {
   if (not model::Register::isValid(D.ReturnValueLocationRegister())) {
     // Skip ABIs that do not allow returning big values.
     // They do not benefit from this check.
@@ -74,9 +74,9 @@ static bool verifyReturnValueLocation(const abi::Definition &D) {
   return true;
 }
 
-namespace abi {
+namespace model {
 
-bool Definition::verify() const {
+bool ABIDefinition::verify() const {
   if (not model::ABI::isValid(ABI()))
     return false;
 
@@ -104,14 +104,14 @@ bool Definition::verify() const {
   if (ScalarTypes().empty())
     return false;
 
-  for (const abi::ScalarType &Type : ScalarTypes())
+  for (const ScalarType &Type : ScalarTypes())
     if (Type.Size() == 0)
       return false;
 
   if (FloatingPointScalarTypes().empty())
     return false;
 
-  for (const abi::ScalarType &Type : FloatingPointScalarTypes())
+  for (const ScalarType &Type : FloatingPointScalarTypes())
     if (Type.Size() == 0)
       return false;
 
@@ -119,7 +119,7 @@ bool Definition::verify() const {
 }
 
 using RFT = model::RawFunctionDefinition;
-bool Definition::isPreliminarilyCompatibleWith(const RFT &Function) const {
+bool ABIDefinition::isPreliminarilyCompatibleWith(const RFT &Function) const {
   revng_assert(verify());
   const auto Architecture = model::ABI::getRegisterArchitecture(ABI());
 
@@ -182,8 +182,8 @@ static std::string translateABIName(model::ABI::Values ABI) {
   return "share/revng/abi/" + model::ABI::getName(ABI).str() + ".yml";
 }
 
-static std::unordered_map<model::ABI::Values, Definition> DefinitionCache;
-const Definition &Definition::get(model::ABI::Values ABI) {
+static std::unordered_map<model::ABI::Values, ABIDefinition> DefinitionCache;
+const ABIDefinition &ABIDefinition::get(model::ABI::Values ABI) {
   revng_assert(ABI != model::ABI::Invalid);
 
   auto CacheIterator = DefinitionCache.find(ABI);
@@ -198,7 +198,7 @@ const Definition &Definition::get(model::ABI::Values ABI) {
     revng_abort(Error.c_str());
   }
 
-  auto Parsed = TupleTree<Definition>::fromFile(MaybePath.value());
+  auto Parsed = TupleTree<ABIDefinition>::fromFile(MaybePath.value());
   if (!Parsed) {
     std::string Error = "Unable to deserialize the definition for: "
                         + ::toString(ABI);
@@ -216,31 +216,31 @@ const Definition &Definition::get(model::ABI::Values ABI) {
   return It->second;
 }
 
-using AlignmentInfo = abi::Definition::AlignmentInfo;
+using AlignmentInfo = ABIDefinition::AlignmentInfo;
 static RecursiveCoroutine<std::optional<AlignmentInfo>>
-naturalAlignment(const abi::Definition &ABI,
+naturalAlignment(const ABIDefinition &ABI,
                  const model::Type &Type,
-                 abi::Definition::AlignmentCache &Cache);
-using AlignmentInfo = abi::Definition::AlignmentInfo;
+                 ABIDefinition::AlignmentCache &Cache);
+using AlignmentInfo = ABIDefinition::AlignmentInfo;
 static RecursiveCoroutine<std::optional<AlignmentInfo>>
-naturalAlignment(const abi::Definition &ABI,
+naturalAlignment(const ABIDefinition &ABI,
                  const model::TypeDefinition &Type,
-                 abi::Definition::AlignmentCache &Cache);
+                 ABIDefinition::AlignmentCache &Cache);
 
 template<typename RealType>
 RecursiveCoroutine<std::optional<AlignmentInfo>>
-underlyingAlignment(const abi::Definition &ABI,
+underlyingAlignment(const ABIDefinition &ABI,
                     const model::TypeDefinition &Type,
-                    abi::Definition::AlignmentCache &Cache) {
+                    ABIDefinition::AlignmentCache &Cache) {
   const auto &Underlying = llvm::cast<RealType>(Type).UnderlyingType();
   rc_return rc_recur naturalAlignment(ABI, *Underlying, Cache);
 }
 
 template<typename RealType>
 RecursiveCoroutine<std::optional<AlignmentInfo>>
-fieldAlignment(const abi::Definition &ABI,
+fieldAlignment(const ABIDefinition &ABI,
                const model::TypeDefinition &Type,
-               abi::Definition::AlignmentCache &Cache) {
+               ABIDefinition::AlignmentCache &Cache) {
   AlignmentInfo Result = { 1, true };
   for (const auto &Field : llvm::cast<RealType>(Type).Fields()) {
     if (auto A = rc_recur naturalAlignment(ABI, *Field.Type(), Cache)) {
@@ -259,9 +259,9 @@ fieldAlignment(const abi::Definition &ABI,
 }
 
 static RecursiveCoroutine<std::optional<AlignmentInfo>>
-naturalAlignment(const abi::Definition &ABI,
+naturalAlignment(const ABIDefinition &ABI,
                  const model::TypeDefinition &Type,
-                 abi::Definition::AlignmentCache &Cache) {
+                 ABIDefinition::AlignmentCache &Cache) {
   if (auto Iterator = Cache.find(&Type); Iterator != Cache.end())
     rc_return Iterator->second;
 
@@ -325,9 +325,9 @@ naturalAlignment(const abi::Definition &ABI,
 }
 
 static RecursiveCoroutine<std::optional<AlignmentInfo>>
-naturalAlignment(const abi::Definition &ABI,
+naturalAlignment(const ABIDefinition &ABI,
                  const model::Type &Type,
-                 abi::Definition::AlignmentCache &Cache) {
+                 ABIDefinition::AlignmentCache &Cache) {
   if (const auto *Array = llvm::dyn_cast<model::ArrayType>(&Type)) {
     // The alignment of an array is the same as the alignment of its element.
     rc_return rc_recur naturalAlignment(ABI, *Array->ElementType(), Cache);
@@ -378,8 +378,8 @@ assertOnFailure(std::optional<AlignmentInfo> &&ComputationResult,
   return std::move(ComputationResult);
 }
 
-std::optional<uint64_t> Definition::alignment(const model::Type &Type,
-                                              AlignmentCache &Cache) const {
+std::optional<uint64_t> ABIDefinition::alignment(const model::Type &Type,
+                                                 AlignmentCache &Cache) const {
   auto Result = assertOnFailure(naturalAlignment(*this, Type, Cache),
                                 model::copyType(Type));
   if (Result->Value == 0)
@@ -387,8 +387,9 @@ std::optional<uint64_t> Definition::alignment(const model::Type &Type,
 
   return Result->IsNatural ? Result->Value : 1;
 }
-std::optional<uint64_t> Definition::alignment(const model::TypeDefinition &Type,
-                                              AlignmentCache &Cache) const {
+std::optional<uint64_t>
+ABIDefinition::alignment(const model::TypeDefinition &Type,
+                         AlignmentCache &Cache) const {
   auto Result = assertOnFailure(naturalAlignment(*this, Type, Cache),
                                 model::copyTypeDefinition(Type));
   if (Result->Value == 0)
@@ -398,8 +399,8 @@ std::optional<uint64_t> Definition::alignment(const model::TypeDefinition &Type,
 }
 
 std::optional<bool>
-Definition::hasNaturalAlignment(const model::Type &Type,
-                                AlignmentCache &Cache) const {
+ABIDefinition::hasNaturalAlignment(const model::Type &Type,
+                                   AlignmentCache &Cache) const {
   auto Result = assertOnFailure(naturalAlignment(*this, Type, Cache),
                                 model::copyType(Type));
   if (Result->Value == 0)
@@ -408,8 +409,8 @@ Definition::hasNaturalAlignment(const model::Type &Type,
   return Result->IsNatural;
 }
 std::optional<bool>
-Definition::hasNaturalAlignment(const model::TypeDefinition &Type,
-                                AlignmentCache &Cache) const {
+ABIDefinition::hasNaturalAlignment(const model::TypeDefinition &Type,
+                                   AlignmentCache &Cache) const {
   auto Result = assertOnFailure(naturalAlignment(*this, Type, Cache),
                                 model::copyTypeDefinition(Type));
   if (Result->Value == 0)
@@ -418,4 +419,4 @@ Definition::hasNaturalAlignment(const model::TypeDefinition &Type,
   return Result->IsNatural;
 }
 
-} // namespace abi
+} // namespace model

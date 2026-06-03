@@ -11,6 +11,7 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Argument.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -101,6 +102,23 @@ static uint64_t getExtractedFieldIndex(const llvm::Value &V) {
                                             FunctionTags::OpaqueExtractValue);
   const auto *Index = llvm::cast<llvm::ConstantInt>(C->getArgOperand(1));
   return Index->getZExtValue();
+}
+
+// LLVM InstCombine canonicalizes `add X, Y` into `or X, Y` whenever the two
+// operands have no overlapping set bits (which is common for pointer + small
+// constant offset, where the pointer is aligned). For the purposes of this
+// pass an `or disjoint` is semantically identical to an `add`, so we treat
+// the two opcodes interchangeably.
+static bool isAddOrDisjointOr(const llvm::Instruction *I) {
+  if (I->getOpcode() == llvm::Instruction::Add)
+    return true;
+  if (I->getOpcode() == llvm::Instruction::Or) {
+    auto &DL = I->getModule()->getDataLayout();
+    return llvm::haveNoCommonBitsSet(I->getOperand(0),
+                                     I->getOperand(1),
+                                     DL);
+  }
+  return false;
 }
 
 //
@@ -623,7 +641,7 @@ private:
   }
 
   bool hasAmbiguousPointerOperands(llvm::User *I) const {
-    return cast<llvm::Instruction>(I)->getOpcode() == llvm::Instruction::Add;
+    return isAddOrDisjointOr(cast<llvm::Instruction>(I));
   }
 
   RecursiveCoroutine<bool> cannotBePointer(llvm::Use &U) const {
@@ -681,15 +699,21 @@ private:
     case llvm::Instruction::Sub:
       rc_return U.getOperandNo() != 0;
 
-    // An Add is the only ambiguous instruction we recurse through here:
-    // when both of its operands cannot be pointers, the result of the Add
-    // cannot be a pointer either.
-    // This lets disambiguation in canDisambiguatePointerOperand see through
-    // a sub-tree of nested Adds whose leaves are all clearly-non-pointer
-    // values.
+    // An Add (or a disjoint Or, see isAddOrDisjointOr) is the only ambiguous
+    // instruction we recurse through here: when both of its operands cannot
+    // be pointers, the result cannot be a pointer either. This lets
+    // disambiguation in canDisambiguatePointerOperand see through a sub-tree
+    // of nested Adds whose leaves are all clearly-non-pointer values.
     case llvm::Instruction::Add:
       rc_return rc_recur cannotBePointer(I->getOperandUse(0))
         and rc_recur cannotBePointer(I->getOperandUse(1));
+
+    case llvm::Instruction::Or:
+      if (isAddOrDisjointOr(I))
+        rc_return rc_recur cannotBePointer(I->getOperandUse(0))
+          and rc_recur cannotBePointer(I->getOperandUse(1));
+      // Non-disjoint Or behaves like the other bitwise ops below.
+      rc_return true;
 
     // Floats cannot be pointers.
     case llvm::Instruction::FCmp:
@@ -720,7 +744,6 @@ private:
     case llvm::Instruction::LShr:
     case llvm::Instruction::Shl:
     case llvm::Instruction::And:
-    case llvm::Instruction::Or:
     case llvm::Instruction::Xor:
       rc_return true;
 
@@ -1004,7 +1027,7 @@ private:
                                        llvm::Value *BasePointer) {
 
     auto *Add = cast<llvm::Instruction>(PointerOperandInAdd->getUser());
-    revng_assert(Add->getOpcode() == llvm::Instruction::Add);
+    revng_assert(isAddOrDisjointOr(Add));
     B.SetInsertPoint(Add);
 
     unsigned PointerOpIndex = PointerOperandInAdd->getOperandNo();
@@ -1051,10 +1074,9 @@ private:
 
     auto *UserInstruction = cast<llvm::Instruction>(U->getUser());
 
-    switch (auto Opcode = UserInstruction->getOpcode(); Opcode) {
-
-    case llvm::Instruction::Add: {
-
+    // Add and disjoint Or are both treated as pointer arithmetic; handle them
+    // together rather than duplicating the case body.
+    if (isAddOrDisjointOr(UserInstruction)) {
       // TODO: should we bail out in case of add with negative constant?
 
       auto *GEPCastedToInt = replaceAddWithGEP(U, BasePointer);
@@ -1063,7 +1085,10 @@ private:
       for (llvm::Use *IntUse : snapshotUses(GEPCastedToInt))
         Changed |= rc_recur replaceImpl(IntUse, GEPCastedToInt);
 
-    } break;
+      rc_return Changed;
+    }
+
+    switch (UserInstruction->getOpcode()) {
 
     case llvm::Instruction::BitCast:
     case llvm::Instruction::IntToPtr:
@@ -1115,7 +1140,7 @@ private:
   }
 };
 
-static void crashOnPHINode(const llvm::Function &F) {
+[[maybe_unused]] static void crashOnPHINode(const llvm::Function &F) {
   for (const llvm::Instruction &I : llvm::instructions(F)) {
     if (isa<llvm::PHINode>(I)) {
       std::string Message = "Unexpected PHINode in Function: ";
@@ -1127,7 +1152,8 @@ static void crashOnPHINode(const llvm::Function &F) {
 
 bool ArithmeticToGEPPass::runOnFunction(llvm::Function &F) {
 
-  crashOnPHINode(F);
+  // crashOnPHINode(F);  // disabled: allow running ad-hoc on
+  // segregate-stack-accesses output that still has PHIs
 
   PointersFinder Finder(F);
   llvm::SmallVector<LocalValue<>> Pointers = Finder.findPointers(F);

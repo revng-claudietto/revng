@@ -59,6 +59,8 @@ private:
 
   void createInvalidPrimitivePlaceholder(const llvm::DWARFDie &Die);
 
+  bool isWideFloat(const model::UpcastableType &T) const;
+
   void createType(const llvm::DWARFDie &Die);
 
   void handleTypeDeclaration(const llvm::DWARFDie &Die);

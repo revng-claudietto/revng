@@ -268,6 +268,36 @@ void DwarfToModelConverter::createInvalidPrimitivePlaceholder(const DWARFDie
   InvalidPrimitives.insert(&Definition);
 }
 
+bool DwarfToModelConverter::isWideFloat(const model::UpcastableType &T) const {
+  if (T.isEmpty())
+    return false;
+
+  const model::Type *Current = T.get();
+  while (Current != nullptr) {
+    if (auto *Primitive = llvm::dyn_cast<model::PrimitiveType>(Current))
+      return Primitive->PrimitiveKind() == model::PrimitiveKind::Float
+             and Primitive->Size() > 8;
+
+    auto *Defined = llvm::dyn_cast<model::DefinedType>(Current);
+    if (Defined == nullptr)
+      return false;
+
+    const auto *Definition = Defined->Definition().getConst();
+    if (Definition == nullptr)
+      return false;
+
+    if (InvalidPrimitives.contains(Definition))
+      return true;
+
+    auto *Typedef = llvm::dyn_cast<model::TypedefDefinition>(Definition);
+    if (Typedef == nullptr or Typedef->UnderlyingType().isEmpty())
+      return false;
+
+    Current = Typedef->UnderlyingType().get();
+  }
+  return false;
+}
+
 void DwarfToModelConverter::createType(const DWARFDie &Die) {
   auto Tag = Die.getTag();
   revng_assert(hasModelIdentity(Tag));
@@ -482,7 +512,16 @@ DwarfToModelConverter::resolveTypeWithIdentity(const DWARFDie &Die,
       rc_return;
     }
 
-    FunctionType.ReturnType() = rc_recur makeType(Die);
+    {
+      model::UpcastableType ReturnType = rc_recur makeType(Die);
+      if (isWideFloat(ReturnType)) {
+        reportIgnoredDie(Die,
+                         "Function returns a floating-point value larger "
+                         "than 8 bytes");
+        rc_return;
+      }
+      FunctionType.ReturnType() = std::move(ReturnType);
+    }
 
     uint64_t Index = 0;
     for (const DWARFDie &ChildDie : validChildren(Die)) {
@@ -493,6 +532,14 @@ DwarfToModelConverter::resolveTypeWithIdentity(const DWARFDie &Die,
           reportIgnoredDie(Die,
                            "The type of argument " + Twine(++Index)
                              + " cannot be resolved");
+          rc_return;
+        }
+
+        if (isWideFloat(ArgumentType)) {
+          reportIgnoredDie(Die,
+                           "Argument " + Twine(++Index)
+                             + " is a floating-point value larger than 8 "
+                               "bytes");
           rc_return;
         }
 
@@ -834,6 +881,14 @@ DwarfToModelConverter::getSubprogramPrototype(const DWARFDie &InitialDie) {
         return model::UpcastableType::empty();
       }
 
+      if (isWideFloat(ArgumentType)) {
+        reportIgnoredDie(Die,
+                         "Argument " + Twine(++Index)
+                           + " is a floating-point value larger than 8 "
+                             "bytes");
+        return model::UpcastableType::empty();
+      }
+
       // Note: at this stage we don't check the size. If an argument is
       // unsized, the function will be purged later on.
       model::Argument &A = FunctionType.addArgument(std::move(ArgumentType));
@@ -856,7 +911,14 @@ DwarfToModelConverter::getSubprogramPrototype(const DWARFDie &InitialDie) {
   }
 
   // Return type
-  FunctionType.ReturnType() = makeType(Die);
+  model::UpcastableType ReturnType = makeType(Die);
+  if (isWideFloat(ReturnType)) {
+    reportIgnoredDie(Die,
+                     "Function returns a floating-point value larger than 8 "
+                     "bytes");
+    return model::UpcastableType::empty();
+  }
+  FunctionType.ReturnType() = std::move(ReturnType);
 
   return Model->recordNewType(std::move(NewType)).second;
 }

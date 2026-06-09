@@ -245,6 +245,13 @@ const model::UpcastableType *TypeResolver::handleSimpleType(TypeIndex Index) {
       return fail(Index);
     }
 
+    if (PrimitiveKind == PrimitiveKind::Float and *PrimitiveSize > 8) {
+      revng_log(Log,
+                "Warning: ignoring floating-point primitive larger than 8: "
+                  << toString(Index));
+      return fail(Index);
+    }
+
     auto Primitive = PrimitiveType::make(PrimitiveKind, *PrimitiveSize);
 
     if (isPointer(Index)) {

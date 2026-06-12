@@ -819,8 +819,7 @@ void JumpTargetManager::fixPostHelperPC() {
         };
         auto End = Written.end();
         if (std::find_if(Written.begin(), End, WritesPC) != End) {
-          revng::IRBuilder Builder(Call->getParent(),
-                                                       ++Call->getIterator());
+          revng::IRBuilder Builder(Call->getParent(), ++Call->getIterator());
           PCH->deserializePC(Builder);
         }
       }

@@ -295,8 +295,7 @@ llvm::CallInst &emitMessage(IPType &&InsertionPoint,
                             const llvm::Twine &Message,
                             const llvm::DebugLoc &DbgLocation = {},
                             const ProgramCounterHandler *PCH = nullptr) {
-  revng::IRBuilder
-    Builder(std::forward<IPType>(InsertionPoint));
+  revng::IRBuilder Builder(std::forward<IPType>(InsertionPoint));
   return emitMessage(Builder, Message, DbgLocation, PCH);
 }
 

@@ -132,8 +132,7 @@ public:
   }
 
   Instruction *wrap(Instruction *I) {
-    revng::IRBuilder Builder(I->getParent(),
-                                                 ++I->getIterator());
+    revng::IRBuilder Builder(I->getParent(), ++I->getIterator());
     return wrap(Builder, I);
   }
 };

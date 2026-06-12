@@ -1578,8 +1578,7 @@ private:
                                          Instruction *ValueToAssign) {
     auto NextInstruction = ValueToAssign->getNextNonDebugInstruction();
     if constexpr (not IsLegacy) {
-      revng::IRBuilder B(NextInstruction,
-                                             ValueToAssign->getDebugLoc());
+      revng::IRBuilder B(NextInstruction, ValueToAssign->getDebugLoc());
       return B.CreateStore(ValueToAssign, LocalVariable);
     } else {
       // TODO: drop when we drop legacy mode.

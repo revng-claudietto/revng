@@ -143,8 +143,7 @@ void ScopeGraphBuilder::addScopeCloser(BasicBlock *Source,
 
   // We set the debug metadata of the decorator call to the same value it
   // assumes in the `Terminator` of the `BasicBlock`
-  revng::IRBuilder Builder(Terminator,
-                                               Terminator->getDebugLoc());
+  revng::IRBuilder Builder(Terminator, Terminator->getDebugLoc());
   Builder.CreateCall(ScopeCloserFunction, BasicBlockAddressTarget);
 }
 

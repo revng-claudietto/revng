@@ -13,7 +13,7 @@ This repo is **not built standalone** — it is a component of `orchestra` (rev.
 **Do not use git worktrees in this repo.** The orchestra build system and the complex nested checkout structure are incompatible with worktree isolation. Always work directly in the shared checkout.
 
 - **`orc shell -c revng <cmd>`** runs `<cmd>` with the revng environment sourced, **starting in the build directory**. This is the primary way to build and test.
-- `orc install revng` does a full configure + build + install + (post-install) integration tests. Slow; use the incremental commands below for iteration.
+- **`orc install --test revng`** does a full configure + build + install + run integration tests. Use this to verify changes do not break the real test suite. **The `--test` flag is critical** — it ensures tests are actually run, not skipped. Slow; use incremental commands below for iteration.
 
 ```bash
 # from anywhere; these all run in <orchestra>/build/revng/optimized

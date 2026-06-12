@@ -217,7 +217,7 @@ void MakeModelCastPass::makeModelCast(const CastToEmit &ToEmit,
 
   // Here we should definitely use the builder that checks the debug info,
   // but since this going to go away soon, let it stay as is.
-  revng::NonDebugInfoCheckingIRBuilder Builder(I);
+  revng::IRBuilder Builder(I);
   Type *OperandType = Operand->getType();
   CallInst *CallToModelCast = createCallToModelCast(Builder,
                                                     { OperandType,
@@ -280,7 +280,7 @@ bool MakeModelCastPass::runOnFunction(Function &F) {
 
     // Here we should definitely use the builder that checks the debug info,
     // but since this going to go away soon, let it stay as is.
-    revng::NonDebugInfoCheckingIRBuilder Builder(F.getContext());
+    revng::IRBuilder Builder(F.getContext());
 
     for (BasicBlock &BB : F) {
       for (Instruction &I : llvm::make_early_inc_range(BB)) {

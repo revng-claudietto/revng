@@ -1526,7 +1526,7 @@ private:
     // TODO: remove when we drop legacy mode.
     DebugLoc DL = I->getDebugLoc();
     if constexpr (not IsLegacy) {
-      revng::NonDebugInfoCheckingIRBuilder B(F.getContext());
+      revng::IRBuilder B(F.getContext());
       B.SetInsertPointPastAllocas(&F, DL);
       return B.CreateAlloca(I->getType());
     } else {
@@ -1546,7 +1546,7 @@ private:
       DebugLoc DL = InsertBefore->getDebugLoc();
       if (auto *I = dyn_cast<Instruction>(ToCopy))
         DL = I->getDebugLoc();
-      revng::NonDebugInfoCheckingIRBuilder B(InsertBefore, DL);
+      revng::IRBuilder B(InsertBefore, DL);
       return B.CreateLoad(U->getType(), ToCopy);
     } else {
       // TODO: remove when we drop legacy mode.
@@ -1578,7 +1578,7 @@ private:
                                          Instruction *ValueToAssign) {
     auto NextInstruction = ValueToAssign->getNextNonDebugInstruction();
     if constexpr (not IsLegacy) {
-      revng::NonDebugInfoCheckingIRBuilder B(NextInstruction,
+      revng::IRBuilder B(NextInstruction,
                                              ValueToAssign->getDebugLoc());
       return B.CreateStore(ValueToAssign, LocalVariable);
     } else {

@@ -289,7 +289,7 @@ static void flipIRNot(BasicBlock *BB, const NotKind &NotKind) {
     llvm::Value *OriginalLHS = Call->getArgOperand(0);
 
     // TODO: try re-enabling these checks after dropping the old pipeline.
-    revng::NonDebugInfoCheckingIRBuilder Builder(BB);
+    revng::IRBuilder Builder(BB);
     Builder.SetInsertPoint(Call);
     llvm::Value *NewCondition = Builder.CreateIsNotNull(OriginalLHS);
 

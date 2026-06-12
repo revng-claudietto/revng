@@ -545,7 +545,7 @@ bool OPRP::runOnFunction(Function &F) {
 
   // Here we should definitely use the builder that checks the debug info,
   // but since this going to go away soon, let it stay as is.
-  revng::NonDebugInfoCheckingIRBuilder Builder(F.getContext());
+  revng::IRBuilder Builder(F.getContext());
 
   for (const auto &[I, Op] : InstructionsToBeParenthesized) {
     Builder.SetInsertPoint(I);

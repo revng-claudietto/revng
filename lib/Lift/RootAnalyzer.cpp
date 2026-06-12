@@ -218,7 +218,7 @@ private:
   std::vector<TrackedValue> TrackedValues;
   QuickMetadata QMD;
   llvm::Function *ValueMaterializerMarker;
-  revng::NonDebugInfoCheckingIRBuilder Builder;
+  revng::IRBuilder Builder;
 
 public:
   AnalysisRegistry(Module *M) : QMD(getContext(M)), Builder(getContext(M)) {
@@ -395,7 +395,7 @@ Function *RootAnalyzer::createTemporaryRoot(Function *TheFunction,
 
   // Force canonical register values at the beginning of each callee
   Callees.erase(nullptr);
-  revng::NonDebugInfoCheckingIRBuilder Builder(TheModule.getContext());
+  revng::IRBuilder Builder(TheModule.getContext());
   for (BasicBlock *BB : Callees) {
     if (OldToNew.count(BB) == 0)
       continue;
@@ -534,8 +534,8 @@ RootAnalyzer::promoteCSVsToAlloca(Function *OptimizedFunction) {
 
   // Create and initialize an alloca per CSV (except for the PC-affecting ones)
   BasicBlock *EntryBB = &OptimizedFunction->getEntryBlock();
-  revng::NonDebugInfoCheckingIRBuilder AllocaBuilder(&*EntryBB->begin());
-  revng::NonDebugInfoCheckingIRBuilder InitBuilder(EntryBB->getTerminator());
+  revng::IRBuilder AllocaBuilder(&*EntryBB->begin());
+  revng::IRBuilder InitBuilder(EntryBB->getTerminator());
 
   for (GlobalVariable *CSV : toSortedByName(CSVs)) {
     Type *CSVType = CSV->getValueType();
@@ -895,7 +895,7 @@ void RootAnalyzer::cloneOptimizeAndHarvest(Function *TheFunction) {
   AnalysisRegistry AR(&TheModule);
 
   // Register for analysis the value written in the PC before each exit_tb call
-  revng::NonDebugInfoCheckingIRBuilder Builder(TheModule.getContext());
+  revng::IRBuilder Builder(TheModule.getContext());
   for (CallBase *Call : callersIn(JTM.exitTB(), TheFunction)) {
     BasicBlock *BB = Call->getParent();
     auto It = OldToNew.find(Call);

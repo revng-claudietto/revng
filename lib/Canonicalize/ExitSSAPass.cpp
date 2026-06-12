@@ -256,7 +256,7 @@ using EdgeToNewBlockMap = std::map<std::pair<BasicBlock *, BasicBlock *>,
 static void
 buildStore(BasicBlock *StoreBlock, Value *Incoming, AllocaInst *Alloca) {
   // TODO: the checks should be enabled conditionally based on the user.
-  revng::NonDebugInfoCheckingIRBuilder Builder(StoreBlock->getContext());
+  revng::IRBuilder Builder(StoreBlock->getContext());
 
   auto *IncomingInst = dyn_cast<Instruction>(Incoming);
   if (IncomingInst and IncomingInst->getParent() == StoreBlock) {
@@ -305,7 +305,7 @@ static void replacePHIEquivalenceClass(const SetVector<PHINode *> &PHIs,
   LoggerIndent FirstIndent{ Log };
 
   // TODO: the checks should be enabled conditionally based on the user.
-  revng::NonDebugInfoCheckingIRBuilder Builder(F.getContext());
+  revng::IRBuilder Builder(F.getContext());
   const DebugLoc &PHIDebugLoc = (*PHIs.begin())->getDebugLoc();
   Builder.SetInsertPointPastAllocas(&F, PHIDebugLoc);
 

@@ -118,7 +118,7 @@ bool FoldModelGEP::runOnFunction(llvm::Function &F) {
 
   // Here we should definitely use the builder that checks the debug info,
   // but since this going to go away soon, let it stay as is.
-  revng::NonDebugInfoCheckingIRBuilder Builder(LLVMCtx);
+  revng::IRBuilder Builder(LLVMCtx);
   bool Modified = false;
 
   revng_log(Log, "=========Function: " << F.getName());

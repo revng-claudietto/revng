@@ -83,7 +83,7 @@ public:
 
     // Here we should definitely use the builder that checks the debug info,
     // but since this going to go away soon, let it stay as is.
-    revng::NonDebugInfoCheckingIRBuilder B(M.getContext());
+    revng::IRBuilder B(M.getContext());
 
     llvm::FunctionCallee IRComment = makeIRComment(M);
 

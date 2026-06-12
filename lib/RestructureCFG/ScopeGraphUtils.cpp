@@ -104,7 +104,7 @@ void ScopeGraphBuilder::makeGoto(BasicBlock *GotoBlock) const {
   // `BasicBlock`
 
   // TODO: checks are only omitted here because of unit tests.
-  revng::NonDebugInfoCheckingIRBuilder Builder(Terminator);
+  revng::IRBuilder Builder(Terminator);
 
   // We set the debug metadata of the decorator call to the same value it
   // assumes in the `Terminator` of the `BasicBlock`
@@ -143,7 +143,7 @@ void ScopeGraphBuilder::addScopeCloser(BasicBlock *Source,
 
   // We set the debug metadata of the decorator call to the same value it
   // assumes in the `Terminator` of the `BasicBlock`
-  revng::NonDebugInfoCheckingIRBuilder Builder(Terminator,
+  revng::IRBuilder Builder(Terminator,
                                                Terminator->getDebugLoc());
   Builder.CreateCall(ScopeCloserFunction, BasicBlockAddressTarget);
 }
@@ -175,7 +175,7 @@ BasicBlock *ScopeGraphBuilder::makeGotoEdge(BasicBlock *Source,
                                              F);
 
   // TODO: checks are only omitted here because of unit tests.
-  revng::NonDebugInfoCheckingIRBuilder Builder(Context);
+  revng::IRBuilder Builder(Context);
 
   // We set the debug metadata in the inserted `GotoBlock` to the same location
   // of the `Source` `BasicBlock`

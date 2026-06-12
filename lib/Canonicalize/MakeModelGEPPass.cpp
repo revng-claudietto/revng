@@ -2089,7 +2089,7 @@ bool MakeModelGEPPass::runOnFunction(llvm::Function &F) {
 
   // Here we should definitely use the builder that checks the debug info,
   // but since this going to go away soon, let it stay as is.
-  revng::NonDebugInfoCheckingIRBuilder Builder(Context);
+  revng::IRBuilder Builder(Context);
 
   // Create a function pool for AddressOf calls
   auto AddressOfPool = FunctionTags::AddressOf.getPool(M);

@@ -89,7 +89,7 @@ bool RemoveLoadStore::runOnFunction(llvm::Function &F) {
 
   // Here we should definitely use the builder that checks the debug info,
   // but since this going to go away soon, let it stay as is.
-  revng::NonDebugInfoCheckingIRBuilder Builder(LLVMCtx);
+  revng::IRBuilder Builder(LLVMCtx);
 
   // Initialize function pool
   auto AssignPool = FunctionTags::Assign.getPool(M);

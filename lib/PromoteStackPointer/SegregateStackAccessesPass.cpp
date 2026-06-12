@@ -1229,7 +1229,7 @@ void SegregateFunctionStack<Legacy>::upgrade() {
   prepareReturnValueStorage();
 
   // TODO: the checks should be enabled conditionally based on the user.
-  revng::NonDebugInfoCheckingIRBuilder B(NewFunction->getContext());
+  revng::IRBuilder B(NewFunction->getContext());
   setInsertPointToFirstNonAlloca(B, *NewFunction);
 
   lowerArguments(B);

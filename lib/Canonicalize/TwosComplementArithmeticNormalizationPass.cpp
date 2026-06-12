@@ -36,7 +36,7 @@ class UnaryMinusBuilder {
 
   // Here we should definitely use the builder that checks the debug info,
   // but since this going to go away soon, let it stay as is.
-  revng::NonDebugInfoCheckingIRBuilder Builder;
+  revng::IRBuilder Builder;
 
 public:
   UnaryMinusBuilder(llvm::Function &F) :
@@ -60,7 +60,7 @@ class BinaryNotBuilder {
 
   // Here we should definitely use the builder that checks the debug info,
   // but since this going to go away soon, let it stay as is.
-  revng::NonDebugInfoCheckingIRBuilder Builder;
+  revng::IRBuilder Builder;
 
 public:
   BinaryNotBuilder(llvm::Function &F) :
@@ -82,7 +82,7 @@ class BooleanNotBuilder {
 
   // Here we should definitely use the builder that checks the debug info,
   // but since this going to go away soon, let it stay as is.
-  revng::NonDebugInfoCheckingIRBuilder Builder;
+  revng::IRBuilder Builder;
 
 public:
   BooleanNotBuilder(llvm::Function &F) :
@@ -113,7 +113,7 @@ bool TANP::runOnFunction(llvm::Function &F) {
 
   // Here we should definitely use the builder that checks the debug info,
   // but since this going to go away soon, let it stay as is.
-  revng::NonDebugInfoCheckingIRBuilder Builder{ F.getContext() };
+  revng::IRBuilder Builder{ F.getContext() };
 
   bool Changed = false;
 

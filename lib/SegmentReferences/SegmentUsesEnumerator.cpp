@@ -23,7 +23,9 @@ SegmentUsesEnumerator::getUses(Module &M, Function *LimitTo) {
        FunctionTags::SegmentGlobal.globals(&M)) {
     MetaAddress StartAddress = SegmentGlobal::getAddress(SegmentGlobal);
 
-    auto &Segment = Binary.Segments().at(StartAddress);
+    const model::Segment *SegmentPtr = Binary.getSegmentFor(StartAddress).first;
+    revng_assert(SegmentPtr != nullptr);
+    const model::Segment &Segment = *SegmentPtr;
     if (SegmentAccess == SegmentAccess::ReadOnly and Segment.IsWriteable())
       continue;
 
@@ -67,10 +69,11 @@ SegmentUsesEnumerator::getUses(Module &M, Function *LimitTo) {
       // Compute address
       auto Offset = MaybeAddend.value();
       auto CandidateAddress = Address + Offset;
-      revng_assert(Binary.Segments().contains(Address));
+      const model::Segment *SegmentPtr = Binary.getSegmentFor(Address).first;
+      revng_assert(SegmentPtr != nullptr);
 
       // Check if we're out of the segment
-      const auto &Segment = Binary.Segments().at(Address);
+      const model::Segment &Segment = *SegmentPtr;
       if (not Segment.contains(CandidateAddress))
         continue;
 

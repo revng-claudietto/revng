@@ -571,10 +571,12 @@ private:
     auto MA = SegmentGlobal::getAddress(*V);
     revng_check(MA.isValid());
 
-    auto It = Model.Segments().find(MA);
-    revng_check(It != Model.Segments().end());
+    const model::Segment *Segment = Model.getSegmentFor(MA).first;
+    revng_check(Segment != nullptr);
 
-    auto VariableType = importModelType(*It->Type());
+    auto VariableType = clift::importType(Context, *Segment->Type());
+    auto Handle = pipeline::locationString(revng::ranks::Segment,
+                                           Segment->key());
 
     return getOrEmitSymbol(V, [&]() -> clift::GlobalVariableOp {
       // It is important not to query any model properties in this scope, as
@@ -583,7 +585,7 @@ private:
       auto Op = Builder.create<GlobalVariableOp>(mlir::UnknownLoc::get(Context),
                                                  Name,
                                                  VariableType);
-      Op.setHandle(pipeline::locationString(revng::ranks::Segment, MA));
+      Op.setHandle(Handle);
       return Op;
     });
   }

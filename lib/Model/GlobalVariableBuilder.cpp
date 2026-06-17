@@ -119,7 +119,7 @@ bool model::GlobalVariableBuilder::insert(const MetaAddress &Address,
     return false;
   }
 
-  auto StructReference = Binary.getDefinitionReference(Struct->key());
+  auto StructReference = Binary.getTypeDefinitionReference(Struct->key());
   auto StructType = model::DefinedType::make(StructReference);
 
   revng_log(Log,

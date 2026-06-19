@@ -5,6 +5,10 @@
 //
 
 #include "revng/Model/GlobalVariableBuilder.h"
+#include "revng/PipeboxCommon/BinariesContainer.h"
+#include "revng/PipeboxCommon/Common.h"
+#include "revng/PipeboxCommon/LLVMContainer.h"
+#include "revng/PipeboxCommon/Model.h"
 #include "revng/SegmentReferences/SegmentUsesEnumerator.h"
 
 class RawBinaryView;
@@ -23,3 +27,18 @@ public:
 
   void run(llvm::Module &M, llvm::Function *LimitTo = nullptr);
 };
+
+namespace revng::pypeline::analyses {
+
+class DetectCStrings {
+public:
+  static constexpr llvm::StringRef Name = "detect-c-strings";
+
+  llvm::Error run(Model &Model,
+                  const Request &Incoming,
+                  llvm::StringRef Configuration,
+                  const BinariesContainer &Binaries,
+                  LLVMFunctionContainer &ModuleContainer);
+};
+
+} // namespace revng::pypeline::analyses

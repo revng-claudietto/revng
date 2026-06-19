@@ -1,19 +1,13 @@
-#include "llvm/ADT/StringExtras.h"
-
-#include "revng/Support/IRHelpers.h"
-#pragma clang optimize off
-
 //
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include "llvm/ADT/StringExtras.h"
+
 #include "revng/Model/RawBinaryView.h"
-#include "revng/Pipeline/ExecutionContext.h"
-#include "revng/Pipeline/Kind.h"
-#include "revng/Pipeline/RegisterAnalysis.h"
-#include "revng/Pipes/FileContainer.h"
-#include "revng/Pipes/Kinds.h"
+#include "revng/Pipebox/Helpers.h"
 #include "revng/SegmentReferences/DetectCStrings.h"
+#include "revng/Support/IRHelpers.h"
 #include "revng/Support/Unicode.h"
 
 using namespace llvm;
@@ -64,27 +58,17 @@ void DetectCStrings::run(llvm::Module &M, llvm::Function *LimitTo) {
   }
 }
 
-class DetectCStringsAnalysis {
-public:
-  static constexpr auto Name = "detect-c-strings";
+llvm::Error revng::pypeline::analyses::DetectCStrings::run(
+  Model &Model,
+  const Request &Incoming,
+  llvm::StringRef Configuration,
+  const BinariesContainer &Binaries,
+  LLVMFunctionContainer &ModuleContainer) {
+  RawBinaryView BinaryView = makeBinaryView(Model, Binaries);
+  ::DetectCStrings StringDetector(*Model.get().get(), BinaryView);
 
-  std::vector<std::vector<pipeline::Kind *>> AcceptedKinds = {
-    { &revng::kinds::Binary },
-    { &revng::kinds::StackAccessesSegregated }
-  };
+  for (const ObjectID *Object : Incoming[1])
+    StringDetector.run(ModuleContainer.getModule(*Object));
 
-  llvm::Error run(pipeline::ExecutionContext &EC,
-                  revng::pipes::BinaryFileContainer &SourceBinary,
-                  pipeline::LLVMContainer &ModuleContainer) {
-    revng::forceVerify(&ModuleContainer.getModule());
-    using namespace revng;
-    auto &Global = getWritableModelFromContext(EC);
-    auto Data = cantFail(MemoryBuffer::getFile(SourceBinary.path().value()));
-    RawBinaryView BinaryView(*Global, Data->getBuffer());
-    DetectCStrings StringDetector(*Global, BinaryView);
-    StringDetector.run(ModuleContainer.getModule());
-    return Error::success();
-  }
-};
-
-static pipeline::RegisterAnalysis<DetectCStringsAnalysis> R;
+  return llvm::Error::success();
+}

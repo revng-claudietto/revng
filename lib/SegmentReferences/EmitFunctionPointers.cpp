@@ -5,9 +5,7 @@
 #include "revng/ABI/FunctionType/Layout.h"
 #include "revng/ABI/ModelHelpers.h"
 #include "revng/Model/NameBuilder.h"
-#include "revng/Pipeline/Contract.h"
-#include "revng/Pipeline/RegisterPipe.h"
-#include "revng/Pipes/Kinds.h"
+#include "revng/SegmentReferences/EmitFunctionPointers.h"
 #include "revng/SegmentReferences/SegmentUsesEnumerator.h"
 #include "revng/Support/IRBuilder.h"
 #include "revng/Support/IRHelpers.h"
@@ -17,7 +15,6 @@ using namespace llvm;
 
 static Logger Log("emit-function-pointers");
 
-// WIP FINAL: implement piperuns
 /// \note Do not run this before segregate-stack-access, this function needs to
 //        create LLVM functions on the fly and it does so assuming we're dealing
 //        with the final form of LLVM functions.
@@ -112,36 +109,10 @@ private:
   }
 };
 
-namespace revng::pipes {
-
-class EmitFunctionPointers {
-public:
-  static constexpr auto Name = "emit-function-pointers";
-
-  std::array<pipeline::ContractGroup, 1> getContract() const {
-    return { pipeline::ContractGroup({ kinds::StackAccessesSegregated,
-                                       0,
-                                       kinds::StackAccessesSegregated,
-                                       0 }) };
-  }
-
-  void run(pipeline::ExecutionContext &EC,
-           pipeline::LLVMContainer &ModuleContainer) {
-    llvm::Module &M = ModuleContainer.getModule();
-    auto ContainerName = ModuleContainer.name();
-    ::EmitFunctionPointers Replacer(*getModelFromContext(EC));
-
-    for (auto &&[ModelFunction, LLVMFunction] :
-         kinds::TaggedFunctionKind::getFunctionsAndCommit(EC,
-                                                          M,
-                                                          ContainerName)) {
-      Replacer.run(*LLVMFunction->getParent(),
-                   ModelFunction->Entry().arch(),
-                   LLVMFunction);
-    }
-  }
-};
-
-} // namespace revng::pipes
-
-static pipeline::RegisterPipe<revng::pipes::EmitFunctionPointers> E;
+void revng::pypeline::piperuns::EmitFunctionPointers::runOnLLVMFunction(
+  const model::Function &Function, llvm::Function &LLVMFunction) {
+  ::EmitFunctionPointers Replacer(Binary);
+  Replacer.run(*LLVMFunction.getParent(),
+               Function.Entry().arch(),
+               &LLVMFunction);
+}

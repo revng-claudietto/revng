@@ -6,12 +6,10 @@
 
 #include "revng/Model/PrimitiveType.h"
 #include "revng/Model/RawBinaryView.h"
-#include "revng/Pipeline/Contract.h"
-#include "revng/Pipeline/RegisterPipe.h"
-#include "revng/Pipes/FileContainer.h"
-#include "revng/Pipes/Kinds.h"
+#include "revng/SegmentReferences/EmitStringConstants.h"
 #include "revng/SegmentReferences/SegmentUsesEnumerator.h"
 #include "revng/Support/Debug.h"
+#include "revng/Support/IRHelpers.h"
 #include "revng/Support/Unicode.h"
 
 using namespace llvm;
@@ -107,7 +105,6 @@ static unsigned getConstCharArrayElementSize(const model::Type *Type) {
   return PrimitiveType->Size();
 }
 
-// WIP FINAL: implement piperuns
 class EmitStringConstants {
 private:
   const model::Binary &Binary;
@@ -200,46 +197,8 @@ EmitStringConstants::getStringOfTypeAt(const MetaAddress &Address,
   return String.data();
 }
 
-namespace revng::pipes {
-
-class EmitStringConstants {
-public:
-  static constexpr auto Name = "emit-string-constants";
-
-  std::array<pipeline::ContractGroup, 2> getContract() const {
-    return {
-      pipeline::ContractGroup({ { revng::kinds::Binary,
-                                  0,
-                                  kinds::StackAccessesSegregated,
-                                  1,
-                                  pipeline::InputPreservation::Preserve },
-                                { kinds::StackAccessesSegregated,
-                                  1,
-                                  kinds::StackAccessesSegregated,
-                                  1 } })
-    };
-  }
-
-  void run(pipeline::ExecutionContext &EC,
-           const revng::pipes::BinaryFileContainer &SourceBinary,
-           pipeline::LLVMContainer &ModuleContainer) {
-    auto &Global = getWritableModelFromContext(EC);
-    llvm::Module &M = ModuleContainer.getModule();
-    auto ContainerName = ModuleContainer.name();
-    revng_assert(SourceBinary.path().has_value());
-    auto Data = cantFail(MemoryBuffer::getFile(SourceBinary.path().value()));
-    RawBinaryView BinaryView(*Global, Data->getBuffer());
-    ::EmitStringConstants Replacer(*Global, BinaryView);
-
-    for (auto &&[ModelFunction, LLVMFunction] :
-         kinds::TaggedFunctionKind::getFunctionsAndCommit(EC,
-                                                          M,
-                                                          ContainerName)) {
-      Replacer.run(*LLVMFunction->getParent(), LLVMFunction);
-    }
-  }
-};
-
-} // namespace revng::pipes
-
-static pipeline::RegisterPipe<revng::pipes::EmitStringConstants> E;
+void revng::pypeline::piperuns::EmitStringConstants::runOnLLVMFunction(
+  const model::Function &Function, llvm::Function &LLVMFunction) {
+  ::EmitStringConstants Replacer(Binary, BinaryView);
+  Replacer.run(*LLVMFunction.getParent(), &LLVMFunction);
+}

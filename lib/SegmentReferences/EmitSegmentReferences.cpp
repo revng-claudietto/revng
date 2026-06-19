@@ -8,10 +8,7 @@
 
 #include "revng/Model/Binary.h"
 #include "revng/Model/FunctionTags.h"
-#include "revng/Pipeline/Contract.h"
-#include "revng/Pipeline/RegisterPipe.h"
-#include "revng/Pipes/Kinds.h"
-#include "revng/Pipes/ModelGlobal.h"
+#include "revng/SegmentReferences/EmitSegmentReferences.h"
 #include "revng/Support/IRBuilder.h"
 
 using namespace llvm;
@@ -114,28 +111,9 @@ private:
   };
 };
 
-namespace revng::pipes {
-
-class EmitSegmentReferences {
-public:
-  static constexpr auto Name = "emit-segment-references";
-
-  std::array<pipeline::ContractGroup, 1> getContract() const {
-    return { pipeline::ContractGroup(kinds::Root,
-                                     0,
-                                     pipeline::InputPreservation::Preserve) };
-  }
-
-  void run(pipeline::ExecutionContext &EC,
-           pipeline::LLVMContainer &ModuleContainer) {
-    Module &M = ModuleContainer.getModule();
-    llvm::Function &F = *M.getFunction("root");
-    ::EmitSegmentReferences ESR(*getModelFromContext(EC), M);
-    ESR.run(F);
-    EC.commitUniqueTarget(ModuleContainer);
-  }
-};
-
-} // namespace revng::pipes
-
-static pipeline::RegisterPipe<revng::pipes::EmitSegmentReferences> E;
+void revng::pypeline::piperuns::EmitSegmentReferences::run() {
+  Module &M = ModuleContainer.getModule();
+  llvm::Function &F = *M.getFunction("root");
+  ::EmitSegmentReferences ESR(Binary, M);
+  ESR.run(F);
+}

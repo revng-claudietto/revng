@@ -128,7 +128,17 @@ class IDBConverter:
             function = idb.analysis.Function(self.idb, function_start_addr)
             function_name = function.get_name()
 
-            idb_function_type = function.get_signature()
+            try:
+                idb_function_type = function.get_signature()
+            except Exception as exception:
+                # A malformed/unsupported type string in the IDB must not abort
+                # the whole import: fall back to importing the function without a
+                # prototype, like the no-signature case below.
+                self.log(
+                    f"warning: Unable to parse the signature of function "
+                    f"{function_name}: {exception}"
+                )
+                idb_function_type = None
 
             function_attributes: List[m.FunctionAttribute] = []
 
@@ -240,14 +250,26 @@ class IDBConverter:
 
             placeholder_definition = self.unwrap_definition(placeholder_type)
             real_definition = self.unwrap_definition(real_type)
-            # TODO: Until now, we only ever saw this affecting structs.
-            assert isinstance(placeholder_definition, m.StructDefinition) and isinstance(
+            # So far we only ever saw this affecting structs and unions, both of
+            # which have their fields filled in by the fixup steps that run
+            # before this one.
+            if isinstance(placeholder_definition, m.StructDefinition) and isinstance(
                 real_definition, m.StructDefinition
-            )
-
-            placeholder_definition.Fields = real_definition.Fields
-            placeholder_definition.Name = real_definition.Name
-            placeholder_definition.Size = real_definition.Size
+            ):
+                placeholder_definition.Fields = real_definition.Fields
+                placeholder_definition.Name = real_definition.Name
+                placeholder_definition.Size = real_definition.Size
+            elif isinstance(placeholder_definition, m.UnionDefinition) and isinstance(
+                real_definition, m.UnionDefinition
+            ):
+                placeholder_definition.Fields = real_definition.Fields
+                placeholder_definition.Name = real_definition.Name
+            else:
+                raise AssertionError(
+                    "Unexpected ordinal type fixup: "
+                    f"{type(placeholder_definition).__name__} -> "
+                    f"{type(real_definition).__name__}"
+                )
 
     def _fixup_structs(self):
         while self._structs_to_fixup:
@@ -276,7 +298,7 @@ class IDBConverter:
                     Type=underlying_type,
                     Offset=committed_size,
                 )
-                member_size = member.type.get_size()
+                member_size = idb_type_size(member.type)
                 if member_size == 0:
                     self.log(
                         f"warning: Dropping zero-sized field {member.name} of struct "
@@ -376,6 +398,7 @@ class IDBConverter:
                 IsConst=False,
             )
             entries = []
+            seen_values = set()
             for member in type.type_details.members:
                 if member.value >= 2 ** (underlying.Size * 8):
                     self.log(
@@ -383,6 +406,16 @@ class IDBConverter:
                         f"{type_name}.{member.name} out of range, ignoring it."
                     )
                     continue
+                # The revng model keys enum entries by their value, so it cannot
+                # represent two entries sharing the same value (i.e. enum
+                # aliases). Keep the first one and drop the others.
+                if member.value in seen_values:
+                    self.log(
+                        f"warning: Enum member {type_name}.{member.name} aliases "
+                        f"value {hex(member.value)}, ignoring it."
+                    )
+                    continue
+                seen_values.add(member.value)
                 # TODO: We should keep the user comment which might exist in member.cmt.
                 enum_entry = m.EnumEntry(
                     Name=member.name,
@@ -471,7 +504,7 @@ class IDBConverter:
             underlying_type = self._convert_idb_type_to_revng_type(type.type_details.obj_type)
             result = m.PointerType(
                 PointeeType=underlying_type,
-                PointerSize=type.get_size(),
+                PointerSize=idb_type_size(type),
                 IsConst=type.is_decl_const(),
             )
             if ordinal is not None:
@@ -482,7 +515,7 @@ class IDBConverter:
             if type.type_details.n_elems == 0:
                 self.log(f"warning: Array {type_name} has invalid zero size.")
 
-            underlying_type = self._convert_idb_type_to_revng_type(type.type_details.obj_type)
+            underlying_type = self._convert_idb_type_to_revng_type(type.type_details.elem_type)
             result = m.ArrayType(
                 ElementType=underlying_type,
                 ElementCount=type.type_details.n_elems,
@@ -497,7 +530,7 @@ class IDBConverter:
         elif type.is_decl_bool():
             result = m.PrimitiveType(
                 PrimitiveKind=m.PrimitiveKind.Unsigned,
-                Size=type.get_size(),
+                Size=idb_type_size(type),
                 IsConst=type.is_decl_const(),
             )
             if ordinal is not None:
@@ -507,7 +540,7 @@ class IDBConverter:
         elif type.is_decl_int() or type.is_decl_floating():
             result = m.PrimitiveType(
                 PrimitiveKind=get_primitive_kind(type),
-                Size=type.get_size(),
+                Size=idb_type_size(type),
                 IsConst=type.is_decl_const(),
             )
             if ordinal is not None:
@@ -557,21 +590,21 @@ class IDBConverter:
 
         elif type.is_decl_partial():
             # Represents an unknown or void type with a known size.
-            assert type.get_size() != 0
+            assert idb_type_size(type) != 0
             # The type should be compatible with being a primitive type.
             # NOTE: If we find a case where this is not satisfied, we can produce a char[].
             assert (
-                type.get_size() == 1
-                or type.get_size() == 2
-                or type.get_size() == 4
-                or type.get_size() == 8
-                or type.get_size() == 10
-                or type.get_size() == 16
+                idb_type_size(type) == 1
+                or idb_type_size(type) == 2
+                or idb_type_size(type) == 4
+                or idb_type_size(type) == 8
+                or idb_type_size(type) == 10
+                or idb_type_size(type) == 16
             )
 
             result = m.PrimitiveType(
                 PrimitiveKind=m.PrimitiveKind.Generic,
-                Size=type.get_size(),
+                Size=idb_type_size(type),
                 IsConst=type.is_decl_const(),
             )
             if ordinal is not None:
@@ -582,7 +615,7 @@ class IDBConverter:
             # IDA does not know anything about this type.
             # TODO: In some cases we should emit a void type (e.g. when the type is only ever used
             # as a pointer).
-            if type.get_size() == 0:
+            if idb_type_size(type) == 0:
                 result = m.PrimitiveType(
                     PrimitiveKind=m.PrimitiveKind.Void, Size=0, IsConst=type.is_decl_const()
                 )
@@ -592,7 +625,7 @@ class IDBConverter:
             else:
                 result = m.PrimitiveType(
                     PrimitiveKind=m.PrimitiveKind.PointerOrNumber,
-                    Size=type.get_size(),
+                    Size=idb_type_size(type),
                     IsConst=type.is_decl_const(),
                 )
                 if ordinal is not None:
@@ -639,6 +672,25 @@ class IDBConverter:
             raise ValueError("Trying to unwrap a nested definition:\n" + str(defined_type))
 
         return self.revng_types_by_id.get(defined_type.Definition.id)
+
+
+def idb_type_size(idb_type: idb.typeinf.TInfo) -> int:
+    """Returns the size of an idb type, working around a python-idb bug.
+
+    python-idb's TInfo.get_size() matches float subtypes against the raw
+    declaration byte without masking the const/volatile modifier bits, so it
+    raises NotImplementedError on qualified primitives such as `const float`.
+    Retry with the modifier bits cleared; the size does not depend on them.
+    """
+    try:
+        return idb_type.get_size()
+    except NotImplementedError:
+        original = idb_type.base_type
+        idb_type.base_type = original & ~idb.typeinf_flags.TYPE_MODIF_MASK
+        try:
+            return idb_type.get_size()
+        finally:
+            idb_type.base_type = original
 
 
 def get_primitive_kind(idb_type: idb.typeinf.TInfo) -> m.PrimitiveKind:

@@ -59,6 +59,14 @@ class YamlDumper(Dumper):
         return True
 
 
+# PyYAML dispatches scalars through the `yaml_representers` dict, not the
+# `represent_str` method; the C-accelerated dumper never looks at the method
+# override at all. Register the representer explicitly so the quoting in
+# represent_str() is actually applied, otherwise the LLVM YAML parser rejects
+# strings starting with `?` or `:` (e.g. mangled C++ names imported from an IDB).
+YamlDumper.add_representer(str, YamlDumper.represent_str)
+
+
 DataclassT = TypeVar("DataclassT", bound="DataclassInstance")
 EnumT = TypeVar("EnumT", bound=Enum)
 T = TypeVar("T")

@@ -4,15 +4,16 @@
       "locked": {
         "lastModified": 1767117944,
         "narHash": "sha256-dyrX71o7itfB+X4hoLQDeotZi1fFo8UuQBEx8WlEPXU=",
-        "ref": "refs/heads/feature/improve-uclibc-ng",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
         "rev": "e8b384078f32ae8bdf7ded43e035b541d61a8cad",
-        "revCount": 918378,
-        "type": "git",
-        "url": "file:///home/nix/nixpkgs"
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "file:///home/nix/nixpkgs"
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "e8b384078f32ae8bdf7ded43e035b541d61a8cad",
+        "type": "github"
       }
     },
     "nixpkgs-2505": {
@@ -92,14 +93,18 @@
     "revng-qa": {
       "flake": false,
       "locked": {
-        "lastModified": 1781863535,
-        "narHash": "sha256-Oc3Y/SBharsMIhNuYChLKsO6nOJcID1xAMYNcn2+P1w=",
-        "path": "/home/nix/revng-qa",
-        "type": "path"
+        "lastModified": 1783091167,
+        "narHash": "sha256-fCn1ULWTGacyGTRy8iblZ/IawGIlVtIBE/Z/dGQ37Nk=",
+        "owner": "revng",
+        "repo": "revng-qa",
+        "rev": "baa655e348459a15599dea5a640e44fb97423237",
+        "type": "github"
       },
       "original": {
-        "path": "/home/nix/revng-qa",
-        "type": "path"
+        "owner": "revng",
+        "repo": "revng-qa",
+        "rev": "baa655e348459a15599dea5a640e44fb97423237",
+        "type": "github"
       }
     },
     "root": {

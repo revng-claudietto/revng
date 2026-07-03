@@ -3,10 +3,6 @@ let
   revng-qa = stdenv.mkDerivation {
     name = "revng-qa";
 
-    # WIP: use the local revng-qa tree (via the `revng-qa` flake
-    # input pointing at path:/home/nix/revng-qa) so we can iterate
-    # on the test-configuration *.yml files. Switch back to a
-    # github: URL once the local changes are upstreamed.
     src = inputs.revng-qa;
 
     nativeBuildInputs = (with pkgs; [

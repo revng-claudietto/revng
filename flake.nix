@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "git+file:///home/nix/nixpkgs";
+    nixpkgs.url = "github:NixOS/nixpkgs/e8b384078f32ae8bdf7ded43e035b541d61a8cad";
 
     nixpkgs-2505.url = "https://github.com/NixOS/nixpkgs/archive/refs/heads/nixos-25.05-small.tar.gz";
 
@@ -27,9 +27,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # WIP: local revng-qa source — iterating on test-configuration
-    # *.yml files. Switch back to a github: URL once upstreamed.
-    revng-qa.url = "path:/home/nix/revng-qa";
+    revng-qa.url = "github:revng/revng-qa/baa655e348459a15599dea5a640e44fb97423237";
     revng-qa.flake = false;
   };
 

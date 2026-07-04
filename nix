@@ -37,6 +37,21 @@ NIX_PORTABLE_ARCHITECTURE="$(uname -m)"
 
 NIX_PORTABLE_URL="https://github.com/DavHau/nix-portable/releases/download/${NIX_PORTABLE_VERSION}/nix-portable-${NIX_PORTABLE_ARCHITECTURE}"
 
+# Modern static nix used for the actual work; nix-portable is only a
+# bootstrap. nix-portable bundles nix 2.20.6, which predates the
+# nix-specific NIX_CACHE_HOME / NIX_STATE_HOME / NIX_CONFIG_HOME vars (added
+# in nix 2.25). On 2.20.6 the only way to move nix's per-user caches off
+# ~/.cache is XDG_CACHE_HOME, which would also redirect every other tool run
+# inside "./nix develop". This static nix honors the nix-only vars, so all
+# state stays under NIX_DIRECTORY with nothing leaking into the environment.
+#
+# It is pinned as a fixed cache.nixos.org store path so bootstrapping is a
+# plain substitution (no flake evaluation under the slower, less robust
+# 2.20.6). To bump the version, on a machine with a modern nix run:
+#   nix build github:NixOS/nix/<tag>#nix-cli-static --print-out-paths
+# and paste the resulting /nix/store/... path here.
+MODERN_NIX_STORE_PATH="${MODERN_NIX_STORE_PATH:-/nix/store/h8fldrbcpyr5s9f90b313ybkr6rrysyi-nix-static-x86_64-unknown-linux-musl-2.26.2}"
+
 # Candidate state directories.
 SCRIPT_DIRECTORY="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 XDG_CACHE_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}"
@@ -84,6 +99,12 @@ SETUP_COMPLETE_MARKER="$NIX_DIRECTORY/.setup-complete"
 
 # nix-portable stores its unpacked runtime and store under $NP_LOCATION.
 export NP_LOCATION="$NIX_DIRECTORY"
+
+# Reuse the host git if present, so nix-portable does not substitute a git
+# into its store on first use (one less closure, faster bootstrap).
+if command -v git >/dev/null 2>&1; then
+    export NP_GIT="$(command -v git)"
+fi
 
 # rev.ng caches.
 GATING_PROJECT_URL="https://rev.ng/gitlab/revng-private/binary-archives"
@@ -202,9 +223,52 @@ EOF
     log ""
 fi
 
-# NIX_USER_CONF_FILES fully replaces ~/.config/nix/nix.conf, so nothing on
-# the host can leak into this env. The nix-portable binary IS nix (a
-# self-contained bundle), so we forward argv directly — "./nix build ."
-# runs "nix build ." inside the nix-portable environment.
+# Bootstrap the modern static nix, once. nix-portable's 2.20.6 realises the
+# pinned store path straight from the binary caches (a plain substitution,
+# no flake evaluation), then we copy the static binary out so it runs
+# standalone from NIX_DIRECTORY. The store path lives inside nix-portable's
+# relocated store at $NP_LOCATION/.nix-portable/nix/store.
+MODERN_NIX="$NIX_DIRECTORY/nix-modern/bin/nix"
+if [ ! -x "$MODERN_NIX" ]; then
+    log "Bootstrapping modern static nix ($(basename "$MODERN_NIX_STORE_PATH"))"
+
+    # Give the bootstrap nix its own cache dir: a stale entry in the shared
+    # host ~/.cache/nix can make 2.20.6 spin forever on an sqlite busy loop.
+    # This XDG override is safe: the bootstrap is internal and never execs a
+    # shell, so it cannot leak into "./nix develop".
+    XDG_CACHE_HOME="$NIX_DIRECTORY/.bootstrap-cache" \
+    NIX_USER_CONF_FILES="$CONFIG_FILE" \
+        "$NIX_PORTABLE_BINARY" build "$MODERN_NIX_STORE_PATH" --no-link >/dev/null
+
+    mkdir -p "$(dirname "$MODERN_NIX")"
+    cp "$NP_LOCATION/.nix-portable${MODERN_NIX_STORE_PATH}/bin/nix" "$MODERN_NIX"
+    chmod +x "$MODERN_NIX"
+    log "Modern nix ready: $("$MODERN_NIX" --version)"
+fi
+
+# Run the modern nix with every per-user path pinned inside NIX_DIRECTORY.
+# NIX_*_HOME are honored only when use-xdg-base-directories is on (set via
+# NIX_CONFIG below). Unlike XDG_CACHE_HOME these are read by nix alone, so
+# nothing here leaks into a "./nix develop" shell or the tools run in it.
+export NIX_CACHE_HOME="$NIX_DIRECTORY/nix/cache"
+export NIX_STATE_HOME="$NIX_DIRECTORY/nix/state"
+export NIX_CONFIG_HOME="$NIX_DIRECTORY/nix/config"
+mkdir -p "$NIX_CACHE_HOME" "$NIX_STATE_HOME" "$NIX_CONFIG_HOME"
+
+# NIX_USER_CONF_FILES fully replaces ~/.config/nix/nix.conf: substituters,
+# trusted keys, netrc and experimental-features all come from our generated
+# nix.conf. use-xdg-base-directories switches on the NIX_*_HOME lookup, and
+# store keeps the store itself inside NIX_DIRECTORY too.
 export NIX_USER_CONF_FILES="$CONFIG_FILE"
-exec "$NIX_PORTABLE_BINARY" "$@"
+export NIX_CONFIG="use-xdg-base-directories = true
+store = $NIX_DIRECTORY/store"
+
+# The static nix has no built-in CA bundle; point it at the host's, falling
+# back to the one nix-portable ships.
+if [ -f /etc/ssl/certs/ca-certificates.crt ]; then
+    export NIX_SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
+elif [ -f "$NP_LOCATION/.nix-portable/ca-bundle.crt" ]; then
+    export NIX_SSL_CERT_FILE="$NP_LOCATION/.nix-portable/ca-bundle.crt"
+fi
+
+exec "$MODERN_NIX" "$@"

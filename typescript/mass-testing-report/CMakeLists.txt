@@ -8,7 +8,7 @@ set(MASS_TESTING_REPORT_FILES
     src/crashes.html
     src/failures.html
     src/index.html
-    src/main.css
+    src/main.scss
     src/main.tsx
     src/globals.d.ts
     src/types.ts

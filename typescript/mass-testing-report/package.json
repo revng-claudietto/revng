@@ -16,6 +16,8 @@
         "filesize": "^10",
         "path-browserify": "^1",
         "preact": "^10",
+        "sass": "^1",
+        "sass-loader": "^16",
         "style-loader": "^4",
         "ts-loader": "^9",
         "webpack-cli": "^5",

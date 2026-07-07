@@ -186,6 +186,10 @@ Function *PromoteCSVs::createWrapper(const WrapperKey &Key) {
                                          Helper->getParent());
   HelperWrapper->setSection(Helper->getSection());
 
+  // Dead CSVs are written through a null out-argument: mark null as valid so
+  // the optimizer does not treat that store as undefined behavior.
+  HelperWrapper->addFnAttr(Attribute::NullPointerIsValid);
+
   // Copy and extend tags
   auto Tags = FunctionTags::TagsSet::from(Helper);
   Tags.insert(FunctionTags::CSVsAsArgumentsWrapper);

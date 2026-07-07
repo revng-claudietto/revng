@@ -9,7 +9,24 @@ set(MASS_TESTING_REPORT_FILES
     src/failures.html
     src/index.html
     src/main.css
-    src/main.ts
+    src/main.tsx
+    src/globals.d.ts
+    src/types.ts
+    src/format.ts
+    src/db.ts
+    src/pages.ts
+    src/actions.ts
+    src/components/Icons.tsx
+    src/components/Chrome.tsx
+    src/components/SummaryCard.tsx
+    src/components/StageBars.tsx
+    src/components/Flamegraphs.tsx
+    src/components/ActionMenu.tsx
+    src/components/DataTableView.tsx
+    src/components/Overview.tsx
+    src/components/Detail.tsx
+    src/components/ListPage.tsx
+    src/components/BinaryDetail.tsx
     src/ooms.html
     src/raw_data.html
     src/successes.html

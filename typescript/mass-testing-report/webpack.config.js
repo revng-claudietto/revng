@@ -7,13 +7,13 @@ const CopyPlugin = require("copy-webpack-plugin");
 
 module.exports = {
     entry: {
-        "main.js": "./src/main.ts",
+        "main.js": "./src/main.tsx",
     },
     mode: "production",
     module: {
         rules: [
             {
-                test: /\.ts$/,
+                test: /\.tsx?$/,
                 exclude: /node_modules/,
                 use: ["ts-loader"],
             },
@@ -29,6 +29,7 @@ module.exports = {
         }),
     ],
     resolve: {
+        extensions: [".tsx", ".ts", "..."],
         fallback: {
             path: require.resolve("path-browserify"),
         },

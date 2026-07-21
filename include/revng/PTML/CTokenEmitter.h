@@ -5,9 +5,11 @@
 //
 
 #include <optional>
+#include <string>
 
 #include "llvm/ADT/APSInt.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/raw_ostream.h"
 
 #include "revng/PTML/Constants.h"
 #include "revng/PTML/PTMLEmitter.h"
@@ -36,6 +38,14 @@ namespace ptml {
 //            - `data-location-definition` or `data-location-references` should
 //              be set based on the handle you already likely have.
 class CTokenEmitter {
+private:
+  Tagging Tags;
+
+  // The whole document is emitted into this buffer; extract() reformats it with
+  // clang-format and returns it.
+  std::string Buffer;
+  llvm::raw_string_ostream BufferStream;
+
   // It is very important to hide the PTML emitter and not to expose any direct
   // access to it in the public interface of this class. This design prevents
   // the emission of lexically invalid C.
@@ -44,19 +54,28 @@ class CTokenEmitter {
   // Used to ensure that only one comment emitter may exist at any given time.
   bool IsEmittingComment = false;
 
-  // This ensures the extra `<div></div>` we need for multi-element artifacts
-  // is properly emitted (PTML requires each document to be a single tag).
+  // The extra `<div></div>` we need for multi-element artifacts (PTML requires
+  // each document to be a single tag). extract() closes it before reformatting.
   //
   // TODO: eventually we will want to introduce a separate emitter layer (think
   //       along the lines of a `DocumentEmitter`) to take care of this instead.
   PTMLTagEmitter MainTag;
 
-public:
-  explicit CTokenEmitter(llvm::raw_ostream &OS, Tagging Tags) :
-    PTML(OS, Tags), MainTag(PTML.makeTagInitializer(ptml::tags::Div)) {
-
-    MainTag.finalizeOpenTag();
+  // Metadata only exists to reposition whitespace in the tagged document; the
+  // plain-C path reformats without it.
+  static EmissionMode getEmissionMode(Tagging Tags) {
+    return Tags == Tagging::Enabled ? EmissionMode::TagsAndMetadata :
+                                      EmissionMode::PlainText;
   }
+
+public:
+  explicit CTokenEmitter(Tagging Tags);
+
+public:
+  // Returns the emitted document, reformatted with clang-format. Closes the
+  // wrapping element, so it must be called exactly once, after all emission is
+  // complete.
+  [[nodiscard]] std::string extract();
 
   void emitSpace() { PTML.emit(" "); }
   void emitNewline() { PTML.emit("\n"); }

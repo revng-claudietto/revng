@@ -87,6 +87,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
     public:
       BasicBlock *BB = nullptr;
       const GeneratedCodeBasicInfo &GCBI;
+      const CPUStateVariableInfo &CSVInfo;
       bool SaveRAFound;
       bool StorePCFound;
       Constant *LinkRegister = nullptr;
@@ -101,10 +102,12 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
     public:
       Visitor(BasicBlock *BB,
               const GeneratedCodeBasicInfo &GCBI,
+              const CPUStateVariableInfo &CSVInfo,
               MetaAddress ReturnPC,
               PointerType *PCPtrTy) :
         BB(BB),
         GCBI(GCBI),
+        CSVInfo(CSVInfo),
         SaveRAFound(false),
         StorePCFound(false),
         LinkRegister(nullptr),
@@ -125,7 +128,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
               if (TargetCSV != nullptr)
                 StorePCFound = true;
             } else if (TargetCSV != nullptr
-                       and not GCBI.isABIRegister(TargetCSV)) {
+                       and not CSVInfo.isABIRegister(TargetCSV)) {
               // Ignore writes to non-ABI registers
             } else if (auto *Constant = dyn_cast<ConstantInt>(V)) {
               revng_assert(LastPC.isValid());
@@ -167,7 +170,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
                     if (auto *S = dyn_cast<StoreInst>(&I)) {
                       Value *Pointer = skipCasts(S->getPointerOperand());
                       auto *P = dyn_cast<GlobalVariable>(Pointer);
-                      if (P != nullptr && GCBI.isSPReg(P)) {
+                      if (P != nullptr && CSVInfo.isSPReg(P)) {
                         LastStackPointer = Store->getPointerOperand();
                         break;
                       }
@@ -219,7 +222,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
     };
 
     MetaAddress ReturnPC = GCBI.getNextPC(Terminator);
-    Visitor V(&BB, GCBI, ReturnPC, PCPtrTy);
+    Visitor V(&BB, GCBI, CSVInfo, ReturnPC, PCPtrTy);
     V.run(Terminator);
 
     BasicBlock *ReturnBB = RootInfo.getBlockAt(ReturnPC);

@@ -30,11 +30,16 @@ public:
   static char ID;
   GeneratedCodeBasicInfo &GCBI;
   RootFunctionInfo &RootInfo;
+  const CPUStateVariableInfo &CSVInfo;
 
 public:
   FunctionCallIdentification(GeneratedCodeBasicInfo &GCBI,
-                             RootFunctionInfo &RootInfo) :
-    llvm::ModulePass(ID), GCBI(GCBI), RootInfo(RootInfo) {}
+                             RootFunctionInfo &RootInfo,
+                             const CPUStateVariableInfo &CSVInfo) :
+    llvm::ModulePass(ID),
+    GCBI(GCBI),
+    RootInfo(RootInfo),
+    CSVInfo(CSVInfo) {}
 
   void getAnalysisUsage(llvm::AnalysisUsage &AU) const override {
     AU.setPreservesAll();

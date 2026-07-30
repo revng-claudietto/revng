@@ -5,14 +5,49 @@
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 
 #include "revng/BasicAnalyses/RootFunctionInfo.h"
+#include "revng/Model/Architecture.h"
+#include "revng/Model/Binary.h"
+#include "revng/Model/FunctionTags.h"
 #include "revng/Support/BlockType.h"
 #include "revng/Support/IRHelpers.h"
 
 using namespace llvm;
+
+CPUStateVariableInfo::CPUStateVariableInfo(const model::Binary &Binary,
+                                           llvm::Module &M) {
+  using namespace model::Architecture;
+  auto Architecture = Binary.Architecture();
+  SP = M.getGlobalVariable(getCSVName(getStackPointer(Architecture)), true);
+  auto ReturnAddressRegister = getReturnAddressRegister(Architecture);
+  if (ReturnAddressRegister != model::Register::Invalid)
+    RA = M.getGlobalVariable(getCSVName(ReturnAddressRegister), true);
+
+  for (model::Register::Values Register : registers(Architecture)) {
+    GlobalVariable *CSV = M.getGlobalVariable(getCSVName(Register), true);
+    ABIRegisters.push_back(CSV);
+    ABIRegistersSet.insert(CSV);
+  }
+
+  for (GlobalVariable &CSV : FunctionTags::CSV.globals(&M))
+    CSVs.push_back(&CSV);
+}
+
+bool
+CPUStateVariableInfo::isSPReg(const llvm::GlobalVariable *GV) const {
+  revng_assert(SP != nullptr);
+  return GV == SP;
+}
+
+bool CPUStateVariableInfo::isSPReg(const llvm::Value *V) const {
+  if (auto *GV = llvm::dyn_cast<const llvm::GlobalVariable>(V))
+    return isSPReg(GV);
+  return false;
+}
 
 static bool isTranslated(const BasicBlock *BB) {
   BlockType::Values Type = getType(BB);

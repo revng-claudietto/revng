@@ -885,9 +885,10 @@ static MetaAddress::Features findCommonFeatures(Function *F) {
 void RootAnalyzer::cloneOptimizeAndHarvest(Function *TheFunction) {
   // Re-run the identification of function calls
   RootFunctionInfo RootInfo(*TheFunction->getParent());
+  CPUStateVariableInfo CSVInfo(*Model, *TheFunction->getParent());
   GeneratedCodeBasicInfo GCBI(*Model, *TheFunction->getParent());
   legacy::PassManager PM;
-  PM.add(new FunctionCallIdentification(GCBI, RootInfo));
+  PM.add(new FunctionCallIdentification(GCBI, RootInfo, CSVInfo));
   PM.run(TheModule);
 
   ValueToValueMapTy OldToNew;

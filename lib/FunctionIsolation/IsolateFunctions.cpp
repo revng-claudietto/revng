@@ -320,9 +320,9 @@ public:
   FunctionOutliner(llvm::Module &M,
                    const model::Binary &Binary,
                    RootFunctionInfo &RootInfo,
-                   GeneratedCodeBasicInfo &GCBI) :
-    Oracle(FSOracle::importWithoutPrototypes(M, GCBI, Binary)),
-    Outliner(M, GCBI, RootInfo, Oracle) {}
+                   const CPUStateVariableInfo &CSVInfo) :
+    Oracle(FSOracle::importWithoutPrototypes(M, CSVInfo, Binary)),
+    Outliner(M, RootInfo, CSVInfo, Oracle) {}
 
 public:
   efa::OutlinedFunction outline(MetaAddress Entry,
@@ -612,6 +612,7 @@ Isolate::Isolate(const class Model &Model,
   llvm::LLVMContext &Context = ClonedModule->getContext();
   IsolatedFunctionType = createFunctionType<void>(Context);
   RootInfo.emplace(*ClonedModule);
+  CSVInfo.emplace(*Model.get().get(), *ClonedModule);
   GCBI.emplace(*Model.get().get(), *ClonedModule);
 
   auto SimpleFunctionType = createFunctionType<void>(Context);
@@ -658,7 +659,7 @@ void Isolate::runOnFunction(const model::Function &TheFunction) {
 
   // Outline the function (later on we'll steal its body and move it into F)
   CallIsolatedFunction CallHandler(*this, *GCBI, FM);
-  FunctionOutliner Outliner(*ClonedModule, Binary, *RootInfo, *GCBI);
+  FunctionOutliner Outliner(*ClonedModule, Binary, *RootInfo, *CSVInfo);
   efa::OutlinedFunction Outlined = Outliner.outline(Entry, &CallHandler);
 
   handleUnexpectedPCCloned(Outlined);

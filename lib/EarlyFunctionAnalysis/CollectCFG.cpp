@@ -23,11 +23,17 @@ CollectCFG::CollectCFG(const class Model &Model,
   Model(Model),
   Output(Output),
   RootInfo(Input.getModule()),
+  CSVInfo(*Model.get().get(), Input.getModule()),
   GCBI(*Model.get().get(), Input.getModule()),
   Oracle(FSO::importBasicPrototypeData(Input.getModule(),
-                                       GCBI,
+                                       CSVInfo,
                                        *Model.get().get())),
-  Analyzer(Input.getModule(), GCBI, RootInfo, Model.get(), Oracle) {
+  Analyzer(Input.getModule(),
+           GCBI,
+           RootInfo,
+           CSVInfo,
+           Model.get(),
+           Oracle) {
 }
 
 void CollectCFG::runOnFunction(const model::Function &Function) {

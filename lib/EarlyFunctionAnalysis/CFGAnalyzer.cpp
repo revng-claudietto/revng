@@ -126,24 +126,26 @@ streamFromOption(const opt<std::string> &Option) {
 CFGAnalyzer::CFGAnalyzer(llvm::Module &M,
                          GeneratedCodeBasicInfo &GCBI,
                          RootFunctionInfo &RootInfo,
+                         const CPUStateVariableInfo &CSVInfo,
                          const TupleTree<model::Binary> &Binary,
                          FunctionSummaryOracle &Oracle) :
   M(M),
   GCBI(GCBI),
+  CSVInfo(CSVInfo),
   PCH(GCBI.programCounterHandler()),
   Oracle(Oracle),
   Binary(Binary),
   PreCallHook(createCallMarkerType(M), "precall_hook", &M),
   PostCallHook(PreCallHook.get()->getFunctionType(), "postcall_hook", &M),
   RetHook(createRetMarkerType(M), "retcall_hook", &M),
-  Outliner(M, GCBI, RootInfo, Oracle),
+  Outliner(M, RootInfo, CSVInfo, Oracle),
   OpaqueBranchConditionsPool(&M, false),
   OutputAAWriter(streamFromOption(AAWriterPath)),
   OutputIBI(streamFromOption(IndirectBranchInfoSummaryPath)) {
 
   // Collect all ABI CSVs except for the stack pointer
-  for (GlobalVariable *CSV : GCBI.abiRegisters())
-    if (CSV != nullptr and not GCBI.isSPReg(CSV))
+  for (GlobalVariable *CSV : CSVInfo.abiRegisters())
+    if (CSV != nullptr and not CSVInfo.isSPReg(CSV))
       ABICSVs.emplace_back(CSV);
 
   // Prepare header for debugging information about indirect branch infos
@@ -168,7 +170,7 @@ OutlinedFunction CFGAnalyzer::outline(const MetaAddress &Entry) {
                             PreCallHook.get(),
                             PostCallHook.get(),
                             RetHook.get(),
-                            GCBI.spReg(),
+                            CSVInfo.spReg(),
                             HasCFG ? &ReturnBlocks : nullptr);
 
   OutlinedFunction Result = Outliner.outline(Entry, &Summarizer);
@@ -384,11 +386,11 @@ CFGAnalyzer::State CFGAnalyzer::loadState(revng::IRBuilder &Builder) const {
   LLVMContext &Context = M.getContext();
 
   // Load the stack pointer
-  auto *SP0 = Builder.createLoad(GCBI.spReg());
+  auto *SP0 = Builder.createLoad(CSVInfo.spReg());
 
   // Load the return address
   Value *ReturnAddress = nullptr;
-  if (GlobalVariable *Register = GCBI.raReg()) {
+  if (GlobalVariable *Register = CSVInfo.raReg()) {
     ReturnAddress = Builder.createLoad(Register);
   } else {
     auto *OpaquePointer = PointerType::get(Context, 0);
@@ -438,7 +440,7 @@ void CFGAnalyzer::createIBIMarker(OutlinedFunction *Outlined) {
   // Create IBI for this function
   //
   LLVMContext &Context = M.getContext();
-  auto *IntTy = GCBI.spReg()->getValueType();
+  auto *IntTy = CSVInfo.spReg()->getValueType();
   Type *I8Ptr = Type::getInt8PtrTy(Context);
   SmallVector<Type *, 16> ArgTypes;
   ArgTypes.resize(PreservedRegistersIndex);
@@ -613,7 +615,7 @@ void CFGAnalyzer::runOptimizationPipeline(llvm::Function *F) {
     // compute subexpressions elimination and resolve redundant expressions in
     // order to compute the stack height.
     FPM.addPass(RemoveNewPCCallsPass());
-    FPM.addPass(RemoveHelperCallsPass(GCBI));
+    FPM.addPass(RemoveHelperCallsPass(CSVInfo.spReg()));
     FPM.addPass(PromoteGlobalToLocalPass());
     FPM.addPass(SimplifyCFGPass());
     FPM.addPass(SROAPass(SROAOptions::ModifyCFG));
@@ -629,7 +631,7 @@ void CFGAnalyzer::runOptimizationPipeline(llvm::Function *F) {
     // Second stage: add alias analysis info and canonicalize `i2p` + `add` into
     // `getelementptr` instructions. Since the IR may change remarkably, another
     // round of passes is necessary to take more optimization opportunities.
-    FPM.addPass(SegregateDirectStackAccessesPass(GCBI));
+    FPM.addPass(SegregateDirectStackAccessesPass(CSVInfo.spReg()));
     FPM.addPass(EarlyCSEPass(true));
     FPM.addPass(InstCombinePass());
     FPM.addPass(GVNPass());

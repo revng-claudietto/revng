@@ -212,8 +212,8 @@ void Outliner::integrateFunctionCallee(CallHandler *TheCallHandler,
         Pointer = CSV;
         PointeeType = CSV->getValueType();
       } else {
-        PointeeType = GCBI.spReg()->getValueType();
-        Pointer = Builder.CreateIntToPtr(Builder.createLoad(GCBI.spReg()),
+        PointeeType = CSVInfo.spReg()->getValueType();
+        Pointer = Builder.CreateIntToPtr(Builder.createLoad(CSVInfo.spReg()),
                                          PointeeType->getPointerTo());
       }
 

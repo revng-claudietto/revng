@@ -127,6 +127,7 @@ private:
   llvm::Module &M;
   llvm::LLVMContext &Context;
   RootFunctionInfo &RootInfo;
+  const CPUStateVariableInfo &CSVInfo;
   GeneratedCodeBasicInfo &GCBI;
   ControlFlowGraphCache &FMC;
   TupleTree<model::Binary> &Binary;
@@ -139,6 +140,7 @@ private:
 public:
   DetectABI(llvm::Module &M,
             RootFunctionInfo &RootInfo,
+            const CPUStateVariableInfo &CSVInfo,
             GeneratedCodeBasicInfo &GCBI,
             ControlFlowGraphCache &FMC,
             TupleTree<model::Binary> &Binary,
@@ -147,6 +149,7 @@ public:
     M(M),
     Context(M.getContext()),
     RootInfo(RootInfo),
+    CSVInfo(CSVInfo),
     GCBI(GCBI),
     FMC(FMC),
     Binary(Binary),
@@ -814,7 +817,7 @@ void DetectABI::propagatePrototypesInFunction(model::Function &Function) {
     //  - every store instruction writes to registers (not memory)
     llvm::BasicBlock *BB = RootInfo.getBlockAt(Block.ID().start());
 
-    GlobalVariable *StackPointer = GCBI.spReg();
+    GlobalVariable *StackPointer = CSVInfo.spReg();
 
     // Check if wrapper writes to Stack Pointer
     const bool WritesSP = WrittenRegisters.contains(StackPointer);
@@ -1116,14 +1119,16 @@ Changes DetectABI::runAnalyses(MetaAddress EntryAddress,
 
 static void runDetectABI(Module &M,
                          RootFunctionInfo &RootInfo,
+                         const CPUStateVariableInfo &CSVInfo,
                          GeneratedCodeBasicInfo &GCBI,
                          ControlFlowGraphCache &FMC,
                          TupleTree<model::Binary> &Binary) {
   using FSOracle = FunctionSummaryOracle;
-  FSOracle Oracle = FSOracle::importFullPrototypes(M, GCBI, *Binary);
-  CFGAnalyzer Analyzer(M, GCBI, RootInfo, Binary, Oracle);
+  FSOracle Oracle = FSOracle::importFullPrototypes(M, CSVInfo, *Binary);
+  CFGAnalyzer Analyzer(M, GCBI, RootInfo, CSVInfo, Binary, Oracle);
   DetectABI ABIDetector(M,
                         RootInfo,
+                        CSVInfo,
                         GCBI,
                         FMC,
                         Binary,
@@ -1145,6 +1150,7 @@ llvm::Error DetectABI::run(Model &Model,
   model::Binary &Binary = *TupleModel;
 
   RootFunctionInfo RootInfo(Module);
+  CPUStateVariableInfo CSVInfo(Binary, Module);
   GeneratedCodeBasicInfo GCBI(Binary, Module);
   ControlFlowGraphCache FMC;
 
@@ -1157,9 +1163,9 @@ llvm::Error DetectABI::run(Model &Model,
   }
 
   efa::collectFunctionsFromCallees(Module, GCBI, Binary);
-  efa::runDetectABI(Module, RootInfo, GCBI, FMC, TupleModel);
+  efa::runDetectABI(Module, RootInfo, CSVInfo, GCBI, FMC, TupleModel);
   collectFunctionsFromUnusedAddresses(Module, RootInfo, GCBI, Binary, FMC);
-  efa::runDetectABI(Module, RootInfo, GCBI, FMC, TupleModel);
+  efa::runDetectABI(Module, RootInfo, CSVInfo, GCBI, FMC, TupleModel);
 
   return llvm::Error::success();
 }

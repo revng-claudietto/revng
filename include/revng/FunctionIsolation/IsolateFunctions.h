@@ -21,6 +21,7 @@ private:
   std::unique_ptr<llvm::Module> ClonedModule;
   LLVMFunctionContainer &Output;
   std::optional<RootFunctionInfo> RootInfo;
+  std::optional<CPUStateVariableInfo> CSVInfo;
   std::optional<GeneratedCodeBasicInfo> GCBI;
   std::vector<std::tuple<MetaAddress, llvm::Function *>> IsolatedFunctions;
 

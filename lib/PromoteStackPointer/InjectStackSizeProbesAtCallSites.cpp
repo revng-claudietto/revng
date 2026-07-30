@@ -2,7 +2,7 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
+#include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/Model/FunctionTags.h"
 #include "revng/PromoteStackPointer/InjectStackSizeProbesAtCallSites.h"
 #include "revng/Support/IRBuilder.h"
@@ -17,11 +17,11 @@ namespace revng::pypeline::piperuns {
 void InjectStackSizeProbesAtCallSites::runOnFunction(const model::Function
                                                        &Function) {
   llvm::Module &Module = ModuleContainer.getModule(ObjectID(Function.Entry()));
-  GeneratedCodeBasicInfo GCBI(Binary, Module);
+  CPUStateVariableInfo CSVInfo(Binary, Module);
   revng::IRBuilder B(Module.getContext());
 
   // Get the stack pointer CSV
-  auto *SP = GCBI.spReg();
+  auto *SP = CSVInfo.spReg();
   auto *SPType = SP->getValueType();
 
   // Create marker for recording stack height at each call site

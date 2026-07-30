@@ -21,7 +21,7 @@
 #include "llvm/Support/Casting.h"
 
 #include "revng/ABI/FunctionType/Layout.h"
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
+#include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/Model/FunctionTags.h"
 #include "revng/Model/IRHelpers.h"
 #include "revng/PromoteStackPointer/PromoteStackPointer.h"
@@ -64,7 +64,7 @@ namespace revng::pypeline::piperuns {
 
 void PromoteStackPointer::runOnLLVMFunction(const model::Function &Function,
                                             llvm::Function &LLVMFunction) {
-  GeneratedCodeBasicInfo GCBI(Binary, *LLVMFunction.getParent());
+  CPUStateVariableInfo CSVInfo(Binary, *LLVMFunction.getParent());
 
   {
     // A couple of preliminary assertions
@@ -74,7 +74,7 @@ void PromoteStackPointer::runOnLLVMFunction(const model::Function &Function,
   }
 
   // Get the global variable representing the stack pointer register.
-  GlobalVariable *GlobalSP = GCBI.spReg();
+  GlobalVariable *GlobalSP = CSVInfo.spReg();
 
   if (not GlobalSP) {
     revng_log(Log, "WARNING: cannot find global variable for stack pointer");

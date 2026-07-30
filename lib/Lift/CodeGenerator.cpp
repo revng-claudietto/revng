@@ -671,7 +671,8 @@ void CodeGenerator::translate(LibTcg &LibTcg,
   legacy::PassManager PostInstCombinePM;
   PostInstCombinePM.add(new FunctionCallIdentification(GCBI,
                                                        RootInfo,
-                                                       CSVInfo));
+                                                       CSVInfo,
+                                                       *PCH));
   PostInstCombinePM.add(new PruneRetSuccessors(RootInfo));
   PostInstCombinePM.add(createGlobalDCEPass());
   PostInstCombinePM.run(*TheModule);

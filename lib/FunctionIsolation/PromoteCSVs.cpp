@@ -2,6 +2,8 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include <memory>
+
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SetVector.h"
@@ -10,9 +12,9 @@
 
 #include "revng/ADT/GenericGraph.h"
 #include "revng/ADT/Queue.h"
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
 #include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/FunctionIsolation/PromoteCSVs.h"
+#include "revng/Model/ProgramCounterHandler.h"
 #include "revng/MFP/MFP.h"
 #include "revng/MFP/SetLattices.h"
 #include "revng/Support/IRBuilder.h"
@@ -62,7 +64,7 @@ private:
   Function &LLVMFunction;
   OpaqueFunctionsPool<StringRef> CSVInitializers;
   CPUStateVariableInfo CSVInfo;
-  GeneratedCodeBasicInfo GCBI;
+  std::unique_ptr<ProgramCounterHandler> PCH;
   model::Architecture::Values Architecture;
   const model::NamingConfiguration &Configuration;
 
@@ -75,7 +77,7 @@ public:
     LLVMFunction(LLVMFunction),
     CSVInitializers(&Module, false),
     CSVInfo(Binary, Module),
-    GCBI(Binary, Module),
+    PCH(ProgramCounterHandler::fromModule(Binary.Architecture(), &Module)),
     Architecture(Binary.Architecture()),
     Configuration(Binary.Configuration().Naming()) {}
 
@@ -116,7 +118,7 @@ void PromoteCSVs::run() {
   CSVInitializers.setTags({ &FunctionTags::OpaqueCSVValue });
 
   // Record existing initializers
-  const auto &PCCSVs = GCBI.programCounterHandler()->pcCSVs();
+  const auto &PCCSVs = PCH->pcCSVs();
   const auto &R = llvm::concat<GlobalVariable *const>(CSVInfo.csvs(), PCCSVs);
   SmallVector<GlobalVariable *> CSVsToSort{ R.begin(), R.end() };
   llvm::sort(CSVsToSort, CompareByName);

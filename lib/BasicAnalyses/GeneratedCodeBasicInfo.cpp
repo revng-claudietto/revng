@@ -22,16 +22,9 @@ using namespace llvm;
 
 GeneratedCodeBasicInfo::GeneratedCodeBasicInfo(const model::Binary &Binary,
                                                llvm::Module &M) :
-  Binary(Binary), Module(M) {
+  Binary(Binary) {
 
   revng_log(PassesLog, "Starting GeneratedCodeBasicInfo");
-
-  using namespace model::Architecture;
-  auto Architecture = Binary.Architecture();
-  PC = M.getGlobalVariable(getPCCSVName(Architecture), true);
-
-  Type *PCType = PC->getValueType();
-  PCRegSize = M.getDataLayout().getTypeAllocSize(PCType);
 
   revng_log(PassesLog, "Ending GeneratedCodeBasicInfo");
 }

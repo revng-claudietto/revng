@@ -35,7 +35,8 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
   LLVMContext &C = M.getContext();
   PointerType *Int8PtrTy = Type::getInt8PtrTy(C);
   auto *Int8NullPtr = ConstantPointerNull::get(Int8PtrTy);
-  auto *PCPtrTy = cast<PointerType>(GCBI.pcReg()->getType());
+  GlobalVariable *PCCSV = PCH.pcCSVs().back();
+  auto *PCPtrTy = cast<PointerType>(PCCSV->getType());
   std::initializer_list<Type *> FunctionArgsTy = {
     Int8PtrTy, Int8PtrTy, Int8PtrTy, PCPtrTy
   };
@@ -91,6 +92,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
       bool SaveRAFound;
       bool StorePCFound;
       Constant *LinkRegister = nullptr;
+      GlobalVariable *PCCSV = nullptr;
       const MetaAddress ReturnPC;
       MetaAddress LastPC;
 
@@ -103,6 +105,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
       Visitor(BasicBlock *BB,
               const GeneratedCodeBasicInfo &GCBI,
               const CPUStateVariableInfo &CSVInfo,
+              GlobalVariable *PCCSV,
               MetaAddress ReturnPC,
               PointerType *PCPtrTy) :
         BB(BB),
@@ -111,6 +114,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
         SaveRAFound(false),
         StorePCFound(false),
         LinkRegister(nullptr),
+        PCCSV(PCCSV),
         ReturnPC(ReturnPC),
         LastPC(ReturnPC),
         NewPCLeft(1 + GCBI.hasDelaySlot()),
@@ -124,7 +128,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
             Value *Pointer = skipCasts(Store->getPointerOperand());
             auto *TargetCSV = dyn_cast<GlobalVariable>(Pointer);
 
-            if (GCBI.isPCReg(TargetCSV)) {
+            if (TargetCSV == PCCSV) {
               if (TargetCSV != nullptr)
                 StorePCFound = true;
             } else if (TargetCSV != nullptr
@@ -222,7 +226,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
     };
 
     MetaAddress ReturnPC = GCBI.getNextPC(Terminator);
-    Visitor V(&BB, GCBI, CSVInfo, ReturnPC, PCPtrTy);
+    Visitor V(&BB, GCBI, CSVInfo, PCCSV, ReturnPC, PCPtrTy);
     V.run(Terminator);
 
     BasicBlock *ReturnBB = RootInfo.getBlockAt(ReturnPC);

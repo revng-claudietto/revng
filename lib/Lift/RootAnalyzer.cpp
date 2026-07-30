@@ -888,7 +888,10 @@ void RootAnalyzer::cloneOptimizeAndHarvest(Function *TheFunction) {
   CPUStateVariableInfo CSVInfo(*Model, *TheFunction->getParent());
   GeneratedCodeBasicInfo GCBI(*Model, *TheFunction->getParent());
   legacy::PassManager PM;
-  PM.add(new FunctionCallIdentification(GCBI, RootInfo, CSVInfo));
+  PM.add(new FunctionCallIdentification(GCBI,
+                                        RootInfo,
+                                        CSVInfo,
+                                        *JTM.programCounterHandler()));
   PM.run(TheModule);
 
   ValueToValueMapTy OldToNew;

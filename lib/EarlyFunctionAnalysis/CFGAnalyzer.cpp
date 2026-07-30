@@ -132,7 +132,7 @@ CFGAnalyzer::CFGAnalyzer(llvm::Module &M,
   M(M),
   GCBI(GCBI),
   CSVInfo(CSVInfo),
-  PCH(GCBI.programCounterHandler()),
+  PCH(ProgramCounterHandler::fromModule(Binary->Architecture(), &M)),
   Oracle(Oracle),
   Binary(Binary),
   PreCallHook(createCallMarkerType(M), "precall_hook", &M),
@@ -395,7 +395,7 @@ CFGAnalyzer::State CFGAnalyzer::loadState(revng::IRBuilder &Builder) const {
   } else {
     auto *OpaquePointer = PointerType::get(Context, 0);
     auto *StackPointerPointer = Builder.CreateIntToPtr(SP0, OpaquePointer);
-    ReturnAddress = Builder.CreateLoad(GCBI.pcReg()->getValueType(),
+    ReturnAddress = Builder.CreateLoad(PCH->pcCSVs().back()->getValueType(),
                                        StackPointerPointer);
   }
 

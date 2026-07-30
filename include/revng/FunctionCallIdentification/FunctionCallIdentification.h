@@ -13,6 +13,7 @@
 #include "revng/BasicAnalyses/CustomCFG.h"
 #include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
 #include "revng/BasicAnalyses/RootFunctionInfo.h"
+#include "revng/Model/ProgramCounterHandler.h"
 #include "revng/Support/IRHelpers.h"
 
 /// Identify function call instructions
@@ -31,15 +32,18 @@ public:
   GeneratedCodeBasicInfo &GCBI;
   RootFunctionInfo &RootInfo;
   const CPUStateVariableInfo &CSVInfo;
+  const ProgramCounterHandler &PCH;
 
 public:
   FunctionCallIdentification(GeneratedCodeBasicInfo &GCBI,
                              RootFunctionInfo &RootInfo,
-                             const CPUStateVariableInfo &CSVInfo) :
+                             const CPUStateVariableInfo &CSVInfo,
+                             const ProgramCounterHandler &PCH) :
     llvm::ModulePass(ID),
     GCBI(GCBI),
     RootInfo(RootInfo),
-    CSVInfo(CSVInfo) {}
+    CSVInfo(CSVInfo),
+    PCH(PCH) {}
 
   void getAnalysisUsage(llvm::AnalysisUsage &AU) const override {
     AU.setPreservesAll();

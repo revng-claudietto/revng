@@ -6,8 +6,8 @@
 
 #include "llvm/Support/Error.h"
 
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
 #include "revng/Lift/IRAnnotators.h"
+#include "revng/Lift/JTReason.h"
 #include "revng/Lift/Lift.h"
 #include "revng/Support/IRHelpers.h"
 #include "revng/Support/ResourceFinder.h"
@@ -44,8 +44,8 @@ collectJumpTargets(const llvm::Module &Module) {
       // Be conservative and assume it is, in absence of information
       bool DependsOnModelFunction = true;
       const Instruction *Terminator = Call->getParent()->getTerminator();
-      if (Terminator->hasMetadata(JTReasonMDName)) {
-        uint32_t Reasons = GeneratedCodeBasicInfo::getJTReasons(Terminator);
+      if (Terminator->hasMetadata(JTReason::MDName)) {
+        uint32_t Reasons = JTReason::getJTReasons(Terminator);
         DependsOnModelFunction = hasReason(Reasons,
                                            JTReason::DependsOnModelFunction);
       }

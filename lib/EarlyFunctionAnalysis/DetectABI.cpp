@@ -28,6 +28,7 @@
 #include "revng/EarlyFunctionAnalysis/ControlFlowGraph.h"
 #include "revng/EarlyFunctionAnalysis/ControlFlowGraphCache.h"
 #include "revng/EarlyFunctionAnalysis/DetectABI.h"
+#include "revng/Lift/JTReason.h"
 #include "revng/EarlyFunctionAnalysis/FunctionEdgeBase.h"
 #include "revng/EarlyFunctionAnalysis/FunctionSummaryOracle.h"
 #include "revng/InlineHelpers/InlineHelpers.h"
@@ -979,9 +980,7 @@ DetectABI::computePreservedRegisters(const CSVSet &ClobberedRegisters) const {
 
 static Logger FunctionFromCalleesLog("functions-from-callees-collection");
 
-static void collectFunctionsFromCallees(Module &M,
-                                        GeneratedCodeBasicInfo &GCBI,
-                                        model::Binary &Binary) {
+static void collectFunctionsFromCallees(Module &M, model::Binary &Binary) {
   Function &Root = *M.getFunction("root");
 
   // Static symbols have already been registered during lifting phase. Now
@@ -994,7 +993,7 @@ static void collectFunctionsFromCallees(Module &M,
     if (Binary.Functions().contains(Entry))
       continue;
 
-    uint32_t Reasons = GCBI.getJTReasons(&BB);
+    uint32_t Reasons = JTReason::getJTReasons(&BB);
     bool IsCallee = hasReason(Reasons, JTReason::Callee);
 
     if (IsCallee) {
@@ -1162,9 +1161,9 @@ llvm::Error DetectABI::run(Model &Model,
     PM.run(Module);
   }
 
-  efa::collectFunctionsFromCallees(Module, GCBI, Binary);
+  efa::collectFunctionsFromCallees(Module, Binary);
   efa::runDetectABI(Module, RootInfo, CSVInfo, GCBI, FMC, TupleModel);
-  collectFunctionsFromUnusedAddresses(Module, RootInfo, GCBI, Binary, FMC);
+  collectFunctionsFromUnusedAddresses(Module, RootInfo, Binary, FMC);
   efa::runDetectABI(Module, RootInfo, CSVInfo, GCBI, FMC, TupleModel);
 
   return llvm::Error::success();

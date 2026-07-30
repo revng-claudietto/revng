@@ -488,7 +488,7 @@ public:
       for (const char *ReasonName : JT.getReasonNames())
         Reasons.push_back(MDString::get(Context, ReasonName));
 
-      T->setMetadata("revng.jt.reasons", MDTuple::get(Context, Reasons));
+      T->setMetadata(JTReason::MDName, MDTuple::get(Context, Reasons));
     }
   }
 

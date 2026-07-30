@@ -10,6 +10,7 @@
 #include "llvm/IR/Module.h"
 
 #include "revng/EarlyFunctionAnalysis/CollectFunctionsFromUnusedAddresses.h"
+#include "revng/Lift/JTReason.h"
 #include "revng/EarlyFunctionAnalysis/ControlFlowGraphCache.h"
 #include "revng/Lift/Lift.h"
 
@@ -21,9 +22,8 @@ class CFFUAImpl {
 public:
   CFFUAImpl(llvm::Module &M,
             const RootFunctionInfo &RootInfo,
-            GeneratedCodeBasicInfo &GCBI,
             model::Binary &Binary) :
-    M(M), RootInfo(RootInfo), GCBI(GCBI), Binary(Binary) {}
+    M(M), RootInfo(RootInfo), Binary(Binary) {}
 
   void run(ControlFlowGraphCache &MDCache) {
     loadAllCFGs(MDCache);
@@ -61,7 +61,7 @@ private:
       if (Binary.Functions().tryGet(Entry) != nullptr)
         continue;
 
-      uint32_t Reasons = GCBI.getJTReasons(&BB);
+      uint32_t Reasons = JTReason::getJTReasons(&BB);
       bool IsSimpleLiteral = hasReason(Reasons, JTReason::SimpleLiteral);
       bool IsUnusedGlobalData = hasReason(Reasons, JTReason::UnusedGlobalData);
       bool IsDirectJump = hasReason(Reasons, JTReason::DirectJump);
@@ -120,16 +120,14 @@ private:
 private:
   llvm::Module &M;
   const RootFunctionInfo &RootInfo;
-  GeneratedCodeBasicInfo &GCBI;
   model::Binary &Binary;
   interval_set UsedRanges;
 };
 
 void collectFunctionsFromUnusedAddresses(llvm::Module &M,
                                          const RootFunctionInfo &RootInfo,
-                                         GeneratedCodeBasicInfo &GCBI,
                                          model::Binary &Binary,
                                          ControlFlowGraphCache &FMC) {
-  CFFUAImpl Impl(M, RootInfo, GCBI, Binary);
+  CFFUAImpl Impl(M, RootInfo, Binary);
   Impl.run(FMC);
 }

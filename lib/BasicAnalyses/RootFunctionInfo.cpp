@@ -37,8 +37,7 @@ CPUStateVariableInfo::CPUStateVariableInfo(const model::Binary &Binary,
     CSVs.push_back(&CSV);
 }
 
-bool
-CPUStateVariableInfo::isSPReg(const llvm::GlobalVariable *GV) const {
+bool CPUStateVariableInfo::isSPReg(const llvm::GlobalVariable *GV) const {
   revng_assert(SP != nullptr);
   return GV == SP;
 }

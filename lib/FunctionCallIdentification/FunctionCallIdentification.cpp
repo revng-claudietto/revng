@@ -225,12 +225,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
     };
 
     MetaAddress ReturnPC = getNextPC(Terminator);
-    Visitor V(&BB,
-              CSVInfo,
-              PCCSV,
-              HasDelaySlot,
-              ReturnPC,
-              PCPtrTy);
+    Visitor V(&BB, CSVInfo, PCCSV, HasDelaySlot, ReturnPC, PCPtrTy);
     V.run(Terminator);
 
     BasicBlock *ReturnBB = RootInfo.getBlockAt(ReturnPC);

@@ -337,7 +337,8 @@ void Isolate::handleUnexpectedPCCloned(efa::OutlinedFunction &Outlined) {
          It = UnexpectedPC->begin())
       It->eraseFromParent();
     revng_assert(UnexpectedPC->empty());
-    const DebugLoc &Dbg = RootInfo->unexpectedPC()->getTerminator()->getDebugLoc();
+    auto *UnexpectedPCTerminator = RootInfo->unexpectedPC()->getTerminator();
+    const DebugLoc &Dbg = UnexpectedPCTerminator->getDebugLoc();
     emitUnreachable(UnexpectedPC, "unexpectedPC", Dbg);
   }
 }

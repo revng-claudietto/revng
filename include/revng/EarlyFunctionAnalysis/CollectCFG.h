@@ -29,7 +29,6 @@ private:
 
   RootFunctionInfo RootInfo;
   CPUStateVariableInfo CSVInfo;
-  GeneratedCodeBasicInfo GCBI;
   efa::FunctionSummaryOracle Oracle;
   efa::CFGAnalyzer Analyzer;
 

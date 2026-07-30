@@ -19,7 +19,6 @@
 
 #include "revng/ABI/FunctionType/Layout.h"
 #include "revng/ADT/Queue.h"
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
 #include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/EarlyFunctionAnalysis/CFGAnalyzer.h"
 #include "revng/EarlyFunctionAnalysis/CallEdge.h"
@@ -129,7 +128,6 @@ private:
   llvm::LLVMContext &Context;
   RootFunctionInfo &RootInfo;
   const CPUStateVariableInfo &CSVInfo;
-  GeneratedCodeBasicInfo &GCBI;
   ControlFlowGraphCache &FMC;
   TupleTree<model::Binary> &Binary;
   FunctionSummaryOracle &Oracle;
@@ -142,7 +140,6 @@ public:
   DetectABI(llvm::Module &M,
             RootFunctionInfo &RootInfo,
             const CPUStateVariableInfo &CSVInfo,
-            GeneratedCodeBasicInfo &GCBI,
             ControlFlowGraphCache &FMC,
             TupleTree<model::Binary> &Binary,
             FunctionSummaryOracle &Oracle,
@@ -151,7 +148,6 @@ public:
     Context(M.getContext()),
     RootInfo(RootInfo),
     CSVInfo(CSVInfo),
-    GCBI(GCBI),
     FMC(FMC),
     Binary(Binary),
     Oracle(Oracle),
@@ -1053,7 +1049,6 @@ Changes DetectABI::runAnalyses(MetaAddress EntryAddress,
 
   // Run ABI-independent data-flow analyses
   ABIResults = analyzeRegisterUsage(OutlinedFunction.Function.get(),
-                                    GCBI,
                                     Binary->Architecture(),
                                     Analyzer.preCallHook(),
                                     Analyzer.postCallHook(),
@@ -1119,16 +1114,14 @@ Changes DetectABI::runAnalyses(MetaAddress EntryAddress,
 static void runDetectABI(Module &M,
                          RootFunctionInfo &RootInfo,
                          const CPUStateVariableInfo &CSVInfo,
-                         GeneratedCodeBasicInfo &GCBI,
                          ControlFlowGraphCache &FMC,
                          TupleTree<model::Binary> &Binary) {
   using FSOracle = FunctionSummaryOracle;
   FSOracle Oracle = FSOracle::importFullPrototypes(M, CSVInfo, *Binary);
-  CFGAnalyzer Analyzer(M, GCBI, RootInfo, CSVInfo, Binary, Oracle);
+  CFGAnalyzer Analyzer(M, RootInfo, CSVInfo, Binary, Oracle);
   DetectABI ABIDetector(M,
                         RootInfo,
                         CSVInfo,
-                        GCBI,
                         FMC,
                         Binary,
                         Oracle,
@@ -1150,7 +1143,6 @@ llvm::Error DetectABI::run(Model &Model,
 
   RootFunctionInfo RootInfo(Module);
   CPUStateVariableInfo CSVInfo(Binary, Module);
-  GeneratedCodeBasicInfo GCBI(Binary, Module);
   ControlFlowGraphCache FMC;
 
   // Link helper bodies once at the start of the analysis, to avoid relinking
@@ -1162,9 +1154,9 @@ llvm::Error DetectABI::run(Model &Model,
   }
 
   efa::collectFunctionsFromCallees(Module, Binary);
-  efa::runDetectABI(Module, RootInfo, CSVInfo, GCBI, FMC, TupleModel);
+  efa::runDetectABI(Module, RootInfo, CSVInfo, FMC, TupleModel);
   collectFunctionsFromUnusedAddresses(Module, RootInfo, Binary, FMC);
-  efa::runDetectABI(Module, RootInfo, CSVInfo, GCBI, FMC, TupleModel);
+  efa::runDetectABI(Module, RootInfo, CSVInfo, FMC, TupleModel);
 
   return llvm::Error::success();
 }

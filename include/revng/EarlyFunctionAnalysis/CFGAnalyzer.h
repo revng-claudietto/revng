@@ -17,7 +17,6 @@
 #include "revng/Support/OpaqueFunctionsPool.h"
 #include "revng/Support/OpaqueRegisterUser.h"
 
-class GeneratedCodeBasicInfo;
 class FunctionSummaryOracle;
 
 namespace llvm {
@@ -71,7 +70,6 @@ public:
 class CFGAnalyzer {
 private:
   llvm::Module &M;
-  GeneratedCodeBasicInfo &GCBI;
   const CPUStateVariableInfo &CSVInfo;
   std::unique_ptr<ProgramCounterHandler> PCH;
   FunctionSummaryOracle &Oracle;
@@ -95,7 +93,6 @@ private:
 
 public:
   CFGAnalyzer(llvm::Module &M,
-              GeneratedCodeBasicInfo &GCBI,
               RootFunctionInfo &RootInfo,
               const CPUStateVariableInfo &CSVInfo,
               const TupleTree<model::Binary> &Binary,

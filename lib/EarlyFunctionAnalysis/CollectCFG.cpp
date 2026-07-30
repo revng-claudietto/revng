@@ -2,7 +2,7 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
+#include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/EarlyFunctionAnalysis/CFGAnalyzer.h"
 #include "revng/EarlyFunctionAnalysis/CollectCFG.h"
 #include "revng/EarlyFunctionAnalysis/ControlFlowGraph.h"
@@ -24,16 +24,10 @@ CollectCFG::CollectCFG(const class Model &Model,
   Output(Output),
   RootInfo(Input.getModule()),
   CSVInfo(*Model.get().get(), Input.getModule()),
-  GCBI(*Model.get().get(), Input.getModule()),
   Oracle(FSO::importBasicPrototypeData(Input.getModule(),
                                        CSVInfo,
                                        *Model.get().get())),
-  Analyzer(Input.getModule(),
-           GCBI,
-           RootInfo,
-           CSVInfo,
-           Model.get(),
-           Oracle) {
+  Analyzer(Input.getModule(), RootInfo, CSVInfo, Model.get(), Oracle) {
 }
 
 void CollectCFG::runOnFunction(const model::Function &Function) {

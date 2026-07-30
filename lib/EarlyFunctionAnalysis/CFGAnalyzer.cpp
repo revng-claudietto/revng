@@ -124,13 +124,11 @@ streamFromOption(const opt<std::string> &Option) {
 }
 
 CFGAnalyzer::CFGAnalyzer(llvm::Module &M,
-                         GeneratedCodeBasicInfo &GCBI,
                          RootFunctionInfo &RootInfo,
                          const CPUStateVariableInfo &CSVInfo,
                          const TupleTree<model::Binary> &Binary,
                          FunctionSummaryOracle &Oracle) :
   M(M),
-  GCBI(GCBI),
   CSVInfo(CSVInfo),
   PCH(ProgramCounterHandler::fromModule(Binary->Architecture(), &M)),
   Oracle(Oracle),

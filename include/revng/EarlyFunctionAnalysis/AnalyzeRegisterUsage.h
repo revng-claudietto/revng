@@ -4,6 +4,9 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include <map>
+#include <set>
+
 #include "llvm/IR/Function.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instruction.h"
@@ -11,8 +14,8 @@
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
 #include "revng/Model/Binary.h"
+#include "revng/Support/BasicBlockID.h"
 #include "revng/Support/Debug.h"
 #include "revng/Support/MetaAddress.h"
 
@@ -71,7 +74,6 @@ public:
 extern template void RUAResults::dump<Logger>(Logger &, const char *) const;
 
 RUAResults analyzeRegisterUsage(llvm::Function *F,
-                                const GeneratedCodeBasicInfo &,
                                 model::Architecture::Values Architecture,
                                 llvm::Function *,
                                 llvm::Function *,

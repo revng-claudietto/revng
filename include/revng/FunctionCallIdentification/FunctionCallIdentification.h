@@ -12,6 +12,7 @@
 
 #include "revng/BasicAnalyses/CustomCFG.h"
 #include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
+#include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/Support/IRHelpers.h"
 
 /// Identify function call instructions
@@ -28,10 +29,12 @@ class FunctionCallIdentification : public llvm::ModulePass {
 public:
   static char ID;
   GeneratedCodeBasicInfo &GCBI;
+  RootFunctionInfo &RootInfo;
 
 public:
-  FunctionCallIdentification(GeneratedCodeBasicInfo &GCBI) :
-    llvm::ModulePass(ID), GCBI(GCBI) {}
+  FunctionCallIdentification(GeneratedCodeBasicInfo &GCBI,
+                             RootFunctionInfo &RootInfo) :
+    llvm::ModulePass(ID), GCBI(GCBI), RootInfo(RootInfo) {}
 
   void getAnalysisUsage(llvm::AnalysisUsage &AU) const override {
     AU.setPreservesAll();

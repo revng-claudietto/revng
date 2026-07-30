@@ -5,6 +5,7 @@
 //
 
 #include "revng/FunctionCallIdentification/PruneRetSuccessors.h"
+#include "revng/Support/BlockType.h"
 #include "revng/Support/Debug.h"
 
 using namespace llvm;
@@ -12,6 +13,12 @@ using namespace llvm;
 char PruneRetSuccessors::ID = 0;
 using Register = RegisterPass<PruneRetSuccessors>;
 static Register X("prs", "Prune Ret Successors", true, true);
+
+static bool isTranslated(const BasicBlock *BB) {
+  BlockType::Values Type = getType(BB);
+  return Type == BlockType::TranslatedBlock
+         or Type == BlockType::JumpTargetBlock;
+}
 
 struct SuccessorsList {
   bool AnyPC = false;
@@ -47,31 +54,31 @@ struct SuccessorsList {
   }
 };
 
-static SuccessorsList getSuccessors(GeneratedCodeBasicInfo &GCBI,
+static SuccessorsList getSuccessors(RootFunctionInfo &RootInfo,
                                     BasicBlock *BB) {
-  bool IsRoot = BB->getParent() == GCBI.root();
+  bool IsRoot = BB->getParent() == RootInfo.root();
 
   SuccessorsList Result;
 
   df_iterator_default_set<BasicBlock *> Visited;
 
   if (IsRoot) {
-    Visited.insert(GCBI.anyPC());
-    Visited.insert(GCBI.unexpectedPC());
+    Visited.insert(RootInfo.anyPC());
+    Visited.insert(RootInfo.unexpectedPC());
   }
 
   for (BasicBlock *Block : depth_first_ext(BB, Visited)) {
     for (BasicBlock *Successor : successors(Block)) {
-      revng_assert(Successor != GCBI.dispatcher());
+      revng_assert(Successor != RootInfo.dispatcher());
 
       MetaAddress Address = getBasicBlockID(Successor).start();
       const auto IBDHB = BlockType::IndirectBranchDispatcherHelperBlock;
       if (Address.isValid()) {
         Visited.insert(Successor);
         Result.Addresses.insert(Address);
-      } else if (IsRoot and Successor == GCBI.anyPC()) {
+      } else if (IsRoot and Successor == RootInfo.anyPC()) {
         Result.AnyPC = true;
-      } else if (IsRoot and Successor == GCBI.unexpectedPC()) {
+      } else if (IsRoot and Successor == RootInfo.unexpectedPC()) {
         Result.UnexpectedPC = true;
       } else if (getType(Successor) == IBDHB) {
         // Ignore
@@ -87,12 +94,11 @@ static SuccessorsList getSuccessors(GeneratedCodeBasicInfo &GCBI,
 bool PruneRetSuccessors::runOnModule(llvm::Module &M) {
   auto &FCI = getAnalysis<FunctionCallIdentification>();
 
-  for (BasicBlock &BB : *GCBI.root()) {
-    if (not GCBI.isTranslated(&BB)
-        or BB.getTerminator()->getNumSuccessors() < 2)
+  for (BasicBlock &BB : *RootInfo.root()) {
+    if (not isTranslated(&BB) or BB.getTerminator()->getNumSuccessors() < 2)
       continue;
 
-    auto Successors = getSuccessors(GCBI, &BB);
+    auto Successors = getSuccessors(RootInfo, &BB);
     if (not Successors.UnexpectedPC or Successors.Other)
       continue;
 
@@ -106,7 +112,7 @@ bool PruneRetSuccessors::runOnModule(llvm::Module &M) {
 
     if (AllFallthrough) {
       Instruction *OldTerminator = BB.getTerminator();
-      auto *NewTerminator = BranchInst::Create(GCBI.anyPC(), &BB);
+      auto *NewTerminator = BranchInst::Create(RootInfo.anyPC(), &BB);
       NewTerminator->copyMetadata(*OldTerminator);
       eraseFromParent(OldTerminator);
     }

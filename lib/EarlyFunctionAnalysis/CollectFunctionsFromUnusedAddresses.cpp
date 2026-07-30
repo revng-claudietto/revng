@@ -20,9 +20,10 @@ static Logger Log("functions-from-unused-addresses-collection");
 class CFFUAImpl {
 public:
   CFFUAImpl(llvm::Module &M,
+            const RootFunctionInfo &RootInfo,
             GeneratedCodeBasicInfo &GCBI,
             model::Binary &Binary) :
-    M(M), GCBI(GCBI), Binary(Binary) {}
+    M(M), RootInfo(RootInfo), GCBI(GCBI), Binary(Binary) {}
 
   void run(ControlFlowGraphCache &MDCache) {
     loadAllCFGs(MDCache);
@@ -32,7 +33,7 @@ public:
 private:
   void loadAllCFGs(ControlFlowGraphCache &MDCache) {
     for (auto &Function : Binary.Functions()) {
-      llvm::BasicBlock *Entry = GCBI.getBlockAt(Function.Entry());
+      llvm::BasicBlock *Entry = RootInfo.getBlockAt(Function.Entry());
       llvm::Instruction *Term = Entry->getTerminator();
 
       const efa::ControlFlowGraph &FM = MDCache.getControlFlowGraph(Function
@@ -118,15 +119,17 @@ private:
 
 private:
   llvm::Module &M;
+  const RootFunctionInfo &RootInfo;
   GeneratedCodeBasicInfo &GCBI;
   model::Binary &Binary;
   interval_set UsedRanges;
 };
 
 void collectFunctionsFromUnusedAddresses(llvm::Module &M,
+                                         const RootFunctionInfo &RootInfo,
                                          GeneratedCodeBasicInfo &GCBI,
                                          model::Binary &Binary,
                                          ControlFlowGraphCache &FMC) {
-  CFFUAImpl Impl(M, GCBI, Binary);
+  CFFUAImpl Impl(M, RootInfo, GCBI, Binary);
   Impl.run(FMC);
 }

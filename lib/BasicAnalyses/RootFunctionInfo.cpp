@@ -1,0 +1,191 @@
+//
+// This file is distributed under the MIT License. See LICENSE.md for details.
+//
+
+#include "llvm/ADT/DepthFirstIterator.h"
+#include "llvm/IR/CFG.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Module.h"
+
+#include "revng/BasicAnalyses/RootFunctionInfo.h"
+#include "revng/Support/BlockType.h"
+#include "revng/Support/IRHelpers.h"
+
+using namespace llvm;
+
+static bool isTranslated(const BasicBlock *BB) {
+  BlockType::Values Type = getType(BB);
+  return Type == BlockType::TranslatedBlock
+         or Type == BlockType::JumpTargetBlock;
+}
+
+RootFunctionInfo::RootFunctionInfo(llvm::Module &M) {
+  RootFunction = M.getFunction("root");
+  NewPC = getIRHelper("newpc", M);
+}
+
+void RootFunctionInfo::parseRoot() const {
+  revng_assert(RootFunction != nullptr);
+  revng_assert(not RootFunction->isDeclaration());
+
+  if (RootParsed)
+    return;
+  RootParsed = true;
+
+  for (BasicBlock &BB : *RootFunction) {
+    if (!BB.empty()) {
+      switch (getType(&BB)) {
+      case BlockType::RootDispatcherBlock:
+        revng_assert(Dispatcher == nullptr);
+        Dispatcher = &BB;
+        break;
+
+      case BlockType::DispatcherFailureBlock:
+        revng_assert(DispatcherFail == nullptr);
+        DispatcherFail = &BB;
+        break;
+
+      case BlockType::AnyPCBlock:
+        revng_assert(AnyPC == nullptr);
+        AnyPC = &BB;
+        break;
+
+      case BlockType::UnexpectedPCBlock:
+        revng_assert(UnexpectedPC == nullptr);
+        UnexpectedPC = &BB;
+        break;
+
+      case BlockType::JumpTargetBlock: {
+        auto *Call = cast<CallInst>(&*BB.begin());
+        revng_assert(getCalledFunction(Call) == NewPC);
+        JumpTargets[addressFromNewPC(Call)] = &BB;
+        break;
+      }
+      case BlockType::RootDispatcherHelperBlock:
+      case BlockType::IndirectBranchDispatcherHelperBlock:
+      case BlockType::EntryPoint:
+      case BlockType::ExternalJumpsHandlerBlock:
+      case BlockType::TranslatedBlock:
+        break;
+      }
+    }
+  }
+}
+
+BasicBlock *RootFunctionInfo::getBlockAt(MetaAddress PC) const {
+  parseRoot();
+
+  auto It = JumpTargets.find(PC);
+  if (It == JumpTargets.end())
+    return nullptr;
+
+  return It->second;
+}
+
+bool RootFunctionInfo::isJump(BasicBlock *BB) const {
+  return isJump(BB->getTerminator());
+}
+
+bool RootFunctionInfo::isJump(Instruction *T) const {
+  parseRoot();
+  revng_assert(T != nullptr);
+  revng_assert(T->getParent()->getParent() == RootFunction);
+  revng_assert(T->isTerminator());
+
+  for (BasicBlock *Successor : successors(T)) {
+    if (not(Successor->empty() or Successor == Dispatcher
+            or Successor == DispatcherFail or Successor == AnyPC
+            or Successor == UnexpectedPC or isJumpTarget(Successor)))
+      return false;
+  }
+
+  return true;
+}
+
+std::set<BasicBlock *>
+RootFunctionInfo::getBlocksGeneratedByPC(MetaAddress PC) const {
+  BasicBlock *Entry = getBlockAt(PC);
+  revng_assert(isJumpTarget(Entry));
+  std::set<BasicBlock *> Result;
+
+  df_iterator_default_set<BasicBlock *> Visited;
+  for (BasicBlock *BB : depth_first_ext(Entry, Visited)) {
+    Result.insert(BB);
+
+    for (BasicBlock *Successor : successors(BB)) {
+      const auto IBDHB = BlockType::IndirectBranchDispatcherHelperBlock;
+      if (isJumpTarget(Successor)
+          or (not isTranslated(Successor) and getType(Successor) != IBDHB)) {
+        Visited.insert(Successor);
+      }
+    }
+  }
+
+  return Result;
+}
+
+BasicBlock *RootFunctionInfo::anyPC() const {
+  parseRoot();
+  return AnyPC;
+}
+
+BasicBlock *RootFunctionInfo::unexpectedPC() const {
+  parseRoot();
+  return UnexpectedPC;
+}
+
+BasicBlock *RootFunctionInfo::dispatcher() const {
+  parseRoot();
+  return Dispatcher;
+}
+
+Function *RootFunctionInfo::root() const {
+  parseRoot();
+  return RootFunction;
+}
+
+SmallVector<std::pair<BasicBlock *, bool>, 4>
+RootFunctionInfo::blocksByPCRange(MetaAddress Start, MetaAddress End) const {
+  SmallVector<std::pair<BasicBlock *, bool>, 4> Result;
+
+  BasicBlock *StartBB = getBlockAt(Start);
+
+  df_iterator_default_set<BasicBlock *> Visited;
+  for (BasicBlock *BB : depth_first_ext(StartBB, Visited)) {
+    enum {
+      Unknown,
+      Yes,
+      No
+    } IsBoundary = Unknown;
+
+    auto SuccBegin = succ_begin(BB);
+    auto SuccEnd = succ_end(BB);
+    if (SuccBegin == SuccEnd) {
+      IsBoundary = Yes;
+    } else {
+      for (BasicBlock *Successor : make_range(SuccBegin, SuccEnd)) {
+        if (getType(Successor) == BlockType::UnexpectedPCBlock)
+          continue;
+
+        auto SuccessorMA = getBasicBlockAddress(Successor);
+        if (not isPartOfRootDispatcher(Successor)
+            and (SuccessorMA.isInvalid()
+                 or (SuccessorMA.address() >= Start.address()
+                     and SuccessorMA.address() < End.address()))) {
+          revng_assert(IsBoundary != Yes);
+          IsBoundary = No;
+        } else {
+          revng_assert(IsBoundary != No);
+          IsBoundary = Yes;
+          Visited.insert(Successor);
+        }
+      }
+    }
+
+    revng_assert(IsBoundary != Unknown);
+    Result.emplace_back(BB, IsBoundary == Yes);
+  }
+
+  return Result;
+}

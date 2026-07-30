@@ -5,10 +5,12 @@
 //
 
 #include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
+#include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/EarlyFunctionAnalysis/ControlFlowGraphCache.h"
 #include "revng/Model/Binary.h"
 
 void collectFunctionsFromUnusedAddresses(llvm::Module &M,
+                                         const RootFunctionInfo &RootInfo,
                                          GeneratedCodeBasicInfo &GCBI,
                                          model::Binary &Binary,
                                          ControlFlowGraphCache &FMC);

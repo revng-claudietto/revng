@@ -125,6 +125,7 @@ streamFromOption(const opt<std::string> &Option) {
 
 CFGAnalyzer::CFGAnalyzer(llvm::Module &M,
                          GeneratedCodeBasicInfo &GCBI,
+                         RootFunctionInfo &RootInfo,
                          const TupleTree<model::Binary> &Binary,
                          FunctionSummaryOracle &Oracle) :
   M(M),
@@ -135,7 +136,7 @@ CFGAnalyzer::CFGAnalyzer(llvm::Module &M,
   PreCallHook(createCallMarkerType(M), "precall_hook", &M),
   PostCallHook(PreCallHook.get()->getFunctionType(), "postcall_hook", &M),
   RetHook(createRetMarkerType(M), "retcall_hook", &M),
-  Outliner(M, GCBI, Oracle),
+  Outliner(M, GCBI, RootInfo, Oracle),
   OpaqueBranchConditionsPool(&M, false),
   OutputAAWriter(streamFromOption(AAWriterPath)),
   OutputIBI(streamFromOption(IndirectBranchInfoSummaryPath)) {

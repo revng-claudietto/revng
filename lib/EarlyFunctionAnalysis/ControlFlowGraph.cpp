@@ -121,11 +121,11 @@ const efa::BasicBlock *ControlFlowGraph::findBlock(GeneratedCodeBasicInfo &GCBI,
   return &*It;
 }
 
-void ControlFlowGraph::serialize(GeneratedCodeBasicInfo &GCBI) const {
+void ControlFlowGraph::serialize(const RootFunctionInfo &RootInfo) const {
   using namespace llvm;
   using llvm::BasicBlock;
 
-  BasicBlock *BB = GCBI.getBlockAt(Entry());
+  BasicBlock *BB = RootInfo.getBlockAt(Entry());
   LLVMContext &Context = getContext(BB);
   std::string Buffer;
   {

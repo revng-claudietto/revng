@@ -71,7 +71,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
       }
     }
 
-    if (not GCBI.isJump(Terminator))
+    if (not RootInfo.isJump(Terminator))
       continue;
 
     // To be a function call we need to find:
@@ -222,7 +222,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
     Visitor V(&BB, GCBI, ReturnPC, PCPtrTy);
     V.run(Terminator);
 
-    BasicBlock *ReturnBB = GCBI.getBlockAt(ReturnPC);
+    BasicBlock *ReturnBB = RootInfo.getBlockAt(ReturnPC);
     if (V.SaveRAFound and V.StorePCFound and V.NewPCLeft == 0
         and ReturnBB != nullptr) {
       // It's a function call, register it
@@ -244,7 +244,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
       } else if (SuccessorsCount == 1) {
         auto *Succ = Terminator->getSuccessor(0);
 
-        if (Succ == GCBI.unexpectedPC())
+        if (Succ == RootInfo.unexpectedPC())
           continue;
 
         bool IsTranslated = GCBI.isTranslated(Succ);

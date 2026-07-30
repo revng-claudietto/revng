@@ -9,6 +9,7 @@
 #include "llvm/Pass.h"
 
 #include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
+#include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/EarlyFunctionAnalysis/CollectCFG.h"
 
 namespace revng::pypeline::piperuns {
@@ -19,6 +20,7 @@ private:
   const CFGMap &CFG;
   std::unique_ptr<llvm::Module> ClonedModule;
   LLVMFunctionContainer &Output;
+  std::optional<RootFunctionInfo> RootInfo;
   std::optional<GeneratedCodeBasicInfo> GCBI;
   std::vector<std::tuple<MetaAddress, llvm::Function *>> IsolatedFunctions;
 

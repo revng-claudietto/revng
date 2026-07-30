@@ -12,17 +12,17 @@
 #include "llvm/Support/Casting.h"
 
 // Local libraries includes
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
+#include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/FunctionCallIdentification/FunctionCallIdentification.h"
 
 class PruneRetSuccessors : public llvm::ModulePass {
 public:
   static char ID;
-  GeneratedCodeBasicInfo &GCBI;
+  RootFunctionInfo &RootInfo;
 
 public:
-  PruneRetSuccessors(GeneratedCodeBasicInfo &GCBI) :
-    llvm::ModulePass(ID), GCBI(GCBI) {}
+  explicit PruneRetSuccessors(RootFunctionInfo &RootInfo) :
+    llvm::ModulePass(ID), RootInfo(RootInfo) {}
 
   void getAnalysisUsage(llvm::AnalysisUsage &AU) const override {
     AU.addRequired<FunctionCallIdentification>();

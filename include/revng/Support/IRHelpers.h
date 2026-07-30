@@ -1158,6 +1158,12 @@ llvm::CallInst *getLastNewPC(llvm::Instruction *TheInstruction);
 ///         second the size of the instruction.
 std::pair<MetaAddress, uint64_t> getPC(llvm::Instruction *TheInstruction);
 
+/// Return the address of the instruction following \p TheInstruction.
+inline MetaAddress getNextPC(llvm::Instruction *TheInstruction) {
+  auto [PC, Size] = getPC(TheInstruction);
+  return PC + Size;
+}
+
 /// Replace all uses of \Old, with \New in \F.
 ///
 /// \return true if it changes something, false otherwise.

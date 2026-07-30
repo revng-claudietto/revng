@@ -91,20 +91,8 @@ public:
     return getKillReason(T) != KillReason::NonKiller;
   }
 
-  llvm::BasicBlock *getCallReturnBlock(llvm::BasicBlock *BB) const {
-    using namespace llvm;
-    CallInst *FunctionCallMarker = getMarker(BB, "function_call");
-    revng_assert(FunctionCallMarker != nullptr);
-    auto *FallthroughBA = cast<BlockAddress>(FunctionCallMarker->getOperand(1));
-    return FallthroughBA->getBasicBlock();
-  }
-
   MetaAddress fromPC(uint64_t PC) const {
     return MetaAddress::fromPC(Binary.Architecture(), PC);
-  }
-
-  bool hasDelaySlot() const {
-    return model::Architecture::hasDelaySlot(Binary.Architecture());
   }
 
 };

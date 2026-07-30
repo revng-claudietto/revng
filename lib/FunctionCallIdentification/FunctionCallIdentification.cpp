@@ -36,6 +36,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
   PointerType *Int8PtrTy = Type::getInt8PtrTy(C);
   auto *Int8NullPtr = ConstantPointerNull::get(Int8PtrTy);
   GlobalVariable *PCCSV = PCH.pcCSVs().back();
+  bool HasDelaySlot = model::Architecture::hasDelaySlot(Architecture);
   auto *PCPtrTy = cast<PointerType>(PCCSV->getType());
   std::initializer_list<Type *> FunctionArgsTy = {
     Int8PtrTy, Int8PtrTy, Int8PtrTy, PCPtrTy
@@ -87,7 +88,6 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
 
     public:
       BasicBlock *BB = nullptr;
-      const GeneratedCodeBasicInfo &GCBI;
       const CPUStateVariableInfo &CSVInfo;
       bool SaveRAFound;
       bool StorePCFound;
@@ -103,13 +103,12 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
 
     public:
       Visitor(BasicBlock *BB,
-              const GeneratedCodeBasicInfo &GCBI,
               const CPUStateVariableInfo &CSVInfo,
               GlobalVariable *PCCSV,
+              bool HasDelaySlot,
               MetaAddress ReturnPC,
               PointerType *PCPtrTy) :
         BB(BB),
-        GCBI(GCBI),
         CSVInfo(CSVInfo),
         SaveRAFound(false),
         StorePCFound(false),
@@ -117,7 +116,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
         PCCSV(PCCSV),
         ReturnPC(ReturnPC),
         LastPC(ReturnPC),
-        NewPCLeft(1 + GCBI.hasDelaySlot()),
+        NewPCLeft(1 + HasDelaySlot),
         PCPtrTy(PCPtrTy) {}
 
     public:
@@ -226,7 +225,12 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
     };
 
     MetaAddress ReturnPC = getNextPC(Terminator);
-    Visitor V(&BB, GCBI, CSVInfo, PCCSV, ReturnPC, PCPtrTy);
+    Visitor V(&BB,
+              CSVInfo,
+              PCCSV,
+              HasDelaySlot,
+              ReturnPC,
+              PCPtrTy);
     V.run(Terminator);
 
     BasicBlock *ReturnBB = RootInfo.getBlockAt(ReturnPC);
@@ -316,10 +320,8 @@ void FunctionCallIdentification::buildFilteredCFG(llvm::Function &F) {
     CustomCFGNode *Node = FilteredCFG.getNode(&BB);
 
     // Is this a function call?
-    if (CallInst *Call = getMarker(&BB, "function_call")) {
-
-      Value *SecondArgument = Call->getArgOperand(1);
-      auto *Fallthrough = cast<BlockAddress>(SecondArgument)->getBasicBlock();
+    if (getMarker(&BB, "function_call") != nullptr) {
+      auto *Fallthrough = getFallthrough(&BB);
       Node->addSuccessor(FilteredCFG.getNode(Fallthrough));
 
     } else {

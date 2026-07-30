@@ -11,7 +11,6 @@
 #include "llvm/Support/Casting.h"
 
 #include "revng/BasicAnalyses/CustomCFG.h"
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
 #include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/Model/ProgramCounterHandler.h"
 #include "revng/Support/IRHelpers.h"
@@ -29,21 +28,21 @@
 class FunctionCallIdentification : public llvm::ModulePass {
 public:
   static char ID;
-  GeneratedCodeBasicInfo &GCBI;
   RootFunctionInfo &RootInfo;
   const CPUStateVariableInfo &CSVInfo;
   const ProgramCounterHandler &PCH;
+  model::Architecture::Values Architecture;
 
 public:
-  FunctionCallIdentification(GeneratedCodeBasicInfo &GCBI,
-                             RootFunctionInfo &RootInfo,
+  FunctionCallIdentification(RootFunctionInfo &RootInfo,
                              const CPUStateVariableInfo &CSVInfo,
-                             const ProgramCounterHandler &PCH) :
+                             const ProgramCounterHandler &PCH,
+                             model::Architecture::Values Architecture) :
     llvm::ModulePass(ID),
-    GCBI(GCBI),
     RootInfo(RootInfo),
     CSVInfo(CSVInfo),
-    PCH(PCH) {}
+    PCH(PCH),
+    Architecture(Architecture) {}
 
   void getAnalysisUsage(llvm::AnalysisUsage &AU) const override {
     AU.setPreservesAll();

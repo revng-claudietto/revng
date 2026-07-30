@@ -49,12 +49,6 @@ bool CPUStateVariableInfo::isSPReg(const llvm::Value *V) const {
   return false;
 }
 
-static bool isTranslated(const BasicBlock *BB) {
-  BlockType::Values Type = getType(BB);
-  return Type == BlockType::TranslatedBlock
-         or Type == BlockType::JumpTargetBlock;
-}
-
 RootFunctionInfo::RootFunctionInfo(llvm::Module &M) {
   RootFunction = M.getFunction("root");
   NewPC = getIRHelper("newpc", M);

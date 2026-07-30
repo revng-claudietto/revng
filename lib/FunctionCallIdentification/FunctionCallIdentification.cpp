@@ -57,7 +57,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
   // Collect function calls
   for (BasicBlock &BB : F) {
 
-    if (BB.empty() or not GCBI.isTranslated(&BB))
+    if (BB.empty() or not isTranslated(&BB))
       continue;
 
     // Consider the basic block only if it's terminator is an actual jump and it
@@ -219,7 +219,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
       SuccessorsType successors(BasicBlock *BB) {
         SuccessorsType Successors;
         for (BasicBlock *Successor : make_range(pred_begin(BB), pred_end(BB)))
-          if (not BB->empty() and GCBI.isTranslated(Successor))
+          if (not BB->empty() and isTranslated(Successor))
             Successors.push_back(Successor);
         return Successors;
       }
@@ -254,7 +254,7 @@ bool FunctionCallIdentification::runOnModule(llvm::Module &M) {
         if (Succ == RootInfo.unexpectedPC())
           continue;
 
-        bool IsTranslated = GCBI.isTranslated(Succ);
+        bool IsTranslated = isTranslated(Succ);
         Callee = IsTranslated ? static_cast<Value *>(BlockAddress::get(Succ)) :
                                 static_cast<Value *>(Int8NullPtr);
       } else {
@@ -310,7 +310,7 @@ void FunctionCallIdentification::buildFilteredCFG(llvm::Function &F) {
   // * Function call edges proceed towards the fallthrough basic block
   for (BasicBlock &BB : F) {
 
-    if (BB.empty() or not GCBI.isTranslated(&BB))
+    if (BB.empty() or not isTranslated(&BB))
       continue;
 
     CustomCFGNode *Node = FilteredCFG.getNode(&BB);
@@ -330,7 +330,7 @@ void FunctionCallIdentification::buildFilteredCFG(llvm::Function &F) {
       auto SuccessorsRange = make_range(succ_begin(&BB), succ_end(&BB));
       for (llvm::BasicBlock *Successor : SuccessorsRange) {
 
-        if (Successor->empty() or not GCBI.isTranslated(Successor))
+        if (Successor->empty() or not isTranslated(Successor))
           continue;
 
         MetaAddress Address = getBasicBlockAddress(Successor);
@@ -342,7 +342,7 @@ void FunctionCallIdentification::buildFilteredCFG(llvm::Function &F) {
       if (not IsReturn) {
         for (BasicBlock *Successor : SuccessorsRange) {
 
-          if (Successor->empty() or not GCBI.isTranslated(Successor))
+          if (Successor->empty() or not isTranslated(Successor))
             continue;
 
           Node->addSuccessor(FilteredCFG.getNode(Successor));

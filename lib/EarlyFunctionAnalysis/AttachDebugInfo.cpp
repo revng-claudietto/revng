@@ -28,13 +28,13 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
 
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
 #include "revng/EarlyFunctionAnalysis/AttachDebugInfo.h"
 #include "revng/EarlyFunctionAnalysis/ControlFlowGraphCache.h"
 #include "revng/Model/FunctionTags.h"
 #include "revng/Ranks/Location.h"
 #include "revng/Ranks/Ranks.h"
 #include "revng/Support/BasicBlockID.h"
+#include "revng/Support/BlockType.h"
 #include "revng/Support/MetaAddress.h"
 
 using namespace llvm;
@@ -110,8 +110,7 @@ private:
 
 public:
   void handleFunction(llvm::Function &F,
-                      efa::ControlFlowGraph &FM,
-                      GeneratedCodeBasicInfo &GCBI) {
+                      efa::ControlFlowGraph &FM) {
     BasicBlockID CurrentBB = BasicBlockID(FM.Entry());
     DILocation *DefaultDI = buildDI(FM.Entry(), CurrentBB, FM.Entry());
     DILocation *CurrentDI = DefaultDI;
@@ -131,7 +130,7 @@ public:
       //   ```
       //
       // The following flag decides which approach is used for this basic block:
-      bool UseFallbackDebugLocation = !GCBI.isTranslated(BB);
+      bool UseFallbackDebugLocation = !isTranslated(BB);
 
       if (getType(BB) == BlockType::IndirectBranchDispatcherHelperBlock) {
         // These helper blocks are introduced to handle indirect jumps (for
@@ -184,7 +183,6 @@ namespace revng::pypeline::piperuns {
 void AttachDebugInfo::runOnLLVMFunction(const model::Function &Function,
                                         llvm::Function &LLVMFunction) {
   llvm::Module &Module = *LLVMFunction.getParent();
-  GeneratedCodeBasicInfo GCBI(Binary, Module);
 
   DIBuilder DIB(Module);
   // This will be used for attaching the !dbg to instructions.
@@ -216,7 +214,7 @@ void AttachDebugInfo::runOnLLVMFunction(const model::Function &Function,
                                   Context,
                                   CU->getFile(),
                                   LLVMFunction.getName());
-  Builder.handleFunction(LLVMFunction, FM, GCBI);
+  Builder.handleFunction(LLVMFunction, FM);
 }
 
 } // namespace revng::pypeline::piperuns

@@ -24,7 +24,6 @@
 #include "revng/ABI/FunctionType/Layout.h"
 #include "revng/ADT/LazySmallBitVector.h"
 #include "revng/ADT/SmallMap.h"
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
 #include "revng/EarlyFunctionAnalysis/CallEdge.h"
 #include "revng/EarlyFunctionAnalysis/ControlFlowGraphCache.h"
 #include "revng/FunctionIsolation/EnforceABI.h"
@@ -53,7 +52,6 @@ private:
   const model::Function &ModelFunction;
   llvm::Function &OldFunction;
   const revng::pypeline::CFGMap &CFGMap;
-  GeneratedCodeBasicInfo GCBI;
   std::unique_ptr<ProgramCounterHandler> PCH;
 
   std::map<Function *, Function *> OldToNew;
@@ -71,7 +69,6 @@ public:
     ModelFunction(ModelFunction),
     OldFunction(OldFunction),
     CFGMap(CFGMap),
-    GCBI(Binary, M),
     PCH(ProgramCounterHandler::fromModule(Binary.Architecture(), &M)),
     Initializers(&M) {}
 
@@ -307,7 +304,7 @@ void EnforceABI::handleRegularFunctionCall(const MetaAddress &CallerAddress,
   MetaAddress Entry = getMetaAddressOfIsolatedFunction(*CallerFunction);
   const efa::ControlFlowGraph &FM = *CFGMap.getElement(ObjectID(Entry));
 
-  const efa::BasicBlock *CallerBlock = FM.findBlock(GCBI, Call->getParent());
+  const efa::BasicBlock *CallerBlock = FM.findBlock(Call->getParent());
   revng_assert(CallerBlock != nullptr);
 
   // Find the CallEdge

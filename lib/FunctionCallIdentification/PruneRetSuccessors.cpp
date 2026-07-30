@@ -14,12 +14,6 @@ char PruneRetSuccessors::ID = 0;
 using Register = RegisterPass<PruneRetSuccessors>;
 static Register X("prs", "Prune Ret Successors", true, true);
 
-static bool isTranslated(const BasicBlock *BB) {
-  BlockType::Values Type = getType(BB);
-  return Type == BlockType::TranslatedBlock
-         or Type == BlockType::JumpTargetBlock;
-}
-
 struct SuccessorsList {
   bool AnyPC = false;
   bool UnexpectedPC = false;

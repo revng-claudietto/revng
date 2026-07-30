@@ -164,3 +164,10 @@ inline bool isPartOfRootDispatcher(llvm::BasicBlock *BB) {
 inline bool isJumpTarget(const llvm::BasicBlock *BB) {
   return getType(BB->getTerminator()) == BlockType::JumpTargetBlock;
 }
+
+/// Return true if \p BB is the result of translating input code.
+inline bool isTranslated(const llvm::BasicBlock *BB) {
+  BlockType::Values Type = getType(BB);
+  return Type == BlockType::TranslatedBlock
+         or Type == BlockType::JumpTargetBlock;
+}

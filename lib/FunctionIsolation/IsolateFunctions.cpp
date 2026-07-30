@@ -28,7 +28,7 @@
 #include "revng/ADT/KeyedObjectContainer.h"
 #include "revng/ADT/Queue.h"
 #include "revng/ADT/ZipMapIterator.h"
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
+#include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/EarlyFunctionAnalysis/AnalyzeRegisterUsage.h"
 #include "revng/EarlyFunctionAnalysis/BasicBlock.h"
 #include "revng/EarlyFunctionAnalysis/CallHandler.h"
@@ -199,14 +199,12 @@ void printAddressListComparison(const LeftMap &ExpectedAddresses,
 class CallIsolatedFunction : public efa::CallHandler {
 private:
   revng::pypeline::piperuns::Isolate &IP;
-  GeneratedCodeBasicInfo &GCBI;
   const efa::ControlFlowGraph &FM;
 
 public:
   CallIsolatedFunction(revng::pypeline::piperuns::Isolate &IP,
-                       GeneratedCodeBasicInfo &GCBI,
                        const efa::ControlFlowGraph &FM) :
-    IP(IP), GCBI(GCBI), FM(FM) {}
+    IP(IP), FM(FM) {}
 
 public:
   void handleCall(MetaAddress CallerBlock,
@@ -244,7 +242,7 @@ private:
                   MetaAddress Callee,
                   llvm::Value *SymbolNamePointer) {
     // Identify caller block
-    const auto *Caller = FM.findBlock(GCBI, Builder.GetInsertBlock());
+    const auto *Caller = FM.findBlock(Builder.GetInsertBlock());
 
     // Identify call edge
     auto IsCallEdge = [](const UpcastablePointer<efa::FunctionEdgeBase> &E) {
@@ -349,7 +347,7 @@ void Isolate::handleAnyPCJumps(efa::OutlinedFunction &Outlined,
   if (BasicBlock *AnyPC = Outlined.AnyPCCloned) {
     for (BasicBlock *AnyPCPredecessor : toVector(predecessors(AnyPC))) {
       // First of all, identify the basic block
-      const efa::BasicBlock *JumpBlock = FM.findBlock(*GCBI, AnyPCPredecessor);
+      const efa::BasicBlock *JumpBlock = FM.findBlock(AnyPCPredecessor);
 
       Instruction *T = AnyPCPredecessor->getTerminator();
       revng_assert(not cast<BranchInst>(T)->isConditional());
@@ -613,7 +611,6 @@ Isolate::Isolate(const class Model &Model,
   IsolatedFunctionType = createFunctionType<void>(Context);
   RootInfo.emplace(*ClonedModule);
   CSVInfo.emplace(*Model.get().get(), *ClonedModule);
-  GCBI.emplace(*Model.get().get(), *ClonedModule);
 
   auto SimpleFunctionType = createFunctionType<void>(Context);
   FunctionDispatcher = createIRHelper("function_dispatcher",
@@ -658,7 +655,7 @@ void Isolate::runOnFunction(const model::Function &TheFunction) {
   revng_assert(F != nullptr);
 
   // Outline the function (later on we'll steal its body and move it into F)
-  CallIsolatedFunction CallHandler(*this, *GCBI, FM);
+  CallIsolatedFunction CallHandler(*this, FM);
   FunctionOutliner Outliner(*ClonedModule, Binary, *RootInfo, *CSVInfo);
   efa::OutlinedFunction Outlined = Outliner.outline(Entry, &CallHandler);
 

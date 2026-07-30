@@ -8,7 +8,6 @@
 
 #include "llvm/Pass.h"
 
-#include "revng/BasicAnalyses/GeneratedCodeBasicInfo.h"
 #include "revng/BasicAnalyses/RootFunctionInfo.h"
 #include "revng/EarlyFunctionAnalysis/CollectCFG.h"
 
@@ -22,7 +21,6 @@ private:
   LLVMFunctionContainer &Output;
   std::optional<RootFunctionInfo> RootInfo;
   std::optional<CPUStateVariableInfo> CSVInfo;
-  std::optional<GeneratedCodeBasicInfo> GCBI;
   std::vector<std::tuple<MetaAddress, llvm::Function *>> IsolatedFunctions;
 
   llvm::FunctionType *IsolatedFunctionType = nullptr;

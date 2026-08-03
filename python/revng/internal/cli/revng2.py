@@ -12,11 +12,14 @@ import signal
 import sys
 from pathlib import Path
 
+import click
+
 from revng.internal.support import cache_directory
 from revng.pypeline.cli.pipeline import pipeline
 from revng.pypeline.cli.project import project
 from revng.pypeline.main import pype, run
 
+from .common import ClickContext
 from .pypeline_commands import init, quick, run_analysis_native, run_pipe_native
 
 
@@ -25,6 +28,9 @@ def patch_pype():
     revng2 is based on `pype`, but we want to change some defaults to be revng specific,
     and we want to add some commands.
     """
+    # Make click build our own context, which provides revng-specific helpers
+    click.Command.context_class = ClickContext
+
     # Replace the name (needed for autocompletion and usage)
     pype.name = "revng2"
     pype.add_command(quick)

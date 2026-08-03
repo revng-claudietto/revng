@@ -164,6 +164,8 @@ def parse_base_directory(path: str, ctx: ClickContext):
 )
 @pass_context
 def pype(ctx: ClickContext, verbose: bool) -> None:
+    ctx.obj.verbose = verbose
+
     # Enable debug logging for pypeline if requested
     if verbose:
         pypeline_logger.debug = True

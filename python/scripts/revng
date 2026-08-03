@@ -25,10 +25,6 @@ if str(new_path) not in sys.path:
     sys.path.insert(0, str(new_path))
 
 if __name__ == "__main__":
-    # `revng.internal.cli.revng` is the old, argparse-based driver: now that all
-    # the commands are click commands it can no longer run any of them, so both
-    # names point to `revng2` until it is renamed.
-    assert os.path.basename(sys.argv[0]) in ("revng", "revng2")
-    from revng.internal.cli.revng2 import main
+    from revng.internal.cli.revng import main
 
     sys.exit(main())

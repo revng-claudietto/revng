@@ -6,6 +6,7 @@
 Definitions shared by all the commands of the revng command-line.
 """
 
+from abc import ABC, abstractmethod
 from typing import Callable, Concatenate, ParamSpec, TypeVar
 
 import click
@@ -14,7 +15,13 @@ from revng.pypeline.cli.context import ClickContext as PypelineClickContext
 from revng.pypeline.cli.wrappers import WrappableCommand
 from revng.pypeline.utils.logger import Logger
 
-__all__ = ["ClickContext", "WrappableCommand", "cli_logger", "pass_context"]
+__all__ = [
+    "ClickContext",
+    "CommandRegistry",
+    "WrappableCommand",
+    "cli_logger",
+    "pass_context",
+]
 
 
 class ClickContext(PypelineClickContext):
@@ -27,6 +34,21 @@ class ClickContext(PypelineClickContext):
     def verbose(self) -> bool:
         """Whether the user asked for verbose output via `--verbose`."""
         return self.obj.verbose
+
+
+class CommandRegistry(ABC):
+    """
+    Interface used by the `setup` function of each command module to add its
+    commands to the revng command-line.
+    """
+
+    @abstractmethod
+    def register(self, group: tuple[str, ...], command: click.Command):
+        """
+        Add `command` to the group addressed by `group`, the root command being
+        addressed by the empty tuple. Registering into a group that does not
+        exist yet is allowed: the command will be added as soon as the group is.
+        """
 
 
 class _CliLogger(Logger):

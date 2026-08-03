@@ -19,11 +19,13 @@ from pathlib import Path
 import click
 
 from revng.internal.support import cache_directory
+from revng.internal.support.collect import collect_files_recursive
 from revng.pypeline.cli.project import project
 from revng.pypeline.main import pype, run
 
-from .common import ClickContext, CommandRegistry
+from .common import ClickContext, CommandRegistry, WrappableCommand, pass_context
 from .pypeline_commands import init, quick, run_analysis_native, run_pipe_native
+from .support import is_file_executable, search_prefixes
 
 # Groups that do not implement anything on their own, they only exist to
 # namespace the commands they contain
@@ -103,6 +105,78 @@ def patch_pype():
             param.envvar = ["REVNG_STORAGE_PROVIDER", param.envvar]
 
 
+def build_external_command(group: tuple[str, ...], name: str, path: str) -> click.Command:
+    """Build the command forwarding its arguments to an external executable."""
+    command_line = " ".join((os.path.basename(sys.argv[0]), *group, name))
+
+    @click.command(
+        cls=WrappableCommand,
+        name=name,
+        help=f"see {command_line} --help",
+        add_help_option=False,
+        context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+    )
+    @click.argument("arguments", metavar="[ARGS]...", nargs=-1, type=click.UNPROCESSED)
+    @pass_context
+    def external_command(ctx: ClickContext, arguments: tuple[str, ...]) -> int:
+        return ctx.try_run([path, *arguments])
+
+    return external_command
+
+
+def discover_external_commands(registry: GroupRegistry):
+    """
+    Register the executables in `libexec/revng` as commands. Their name is
+    split on `-` to find the innermost group they belong to, e.g. `model-opt`
+    becomes `model opt`.
+    """
+    for executable, path in collect_files_recursive(search_prefixes(), ["libexec", "revng"], "*"):
+        if not (is_file_executable(path) and os.path.splitext(path)[1] == ""):
+            continue
+
+        group, name = resolve_command_path(registry, executable)
+        if name in registry.groups[group].commands:
+            continue
+
+        registry.register(group, build_external_command(group, name, path))
+
+
+def resolve_command_path(registry: GroupRegistry, executable: str) -> tuple[tuple[str, ...], str]:
+    """
+    Turn the path of an executable, relative to `libexec/revng`, into the group
+    it belongs to and its command name. Each directory is a group, then the
+    longest prefix of `-`-separated words matching a group is consumed.
+    """
+    name = executable
+    group: tuple[str, ...] = ()
+    if "/" in executable:
+        path_parts = os.path.split(executable)
+        name = path_parts[-1]
+        group = tuple(path_parts[:-1])
+        # The directories might not be groups yet
+        for index in range(1, len(group) + 1):
+            if group[:index] not in registry.groups:
+                registry.register(group[: index - 1], click.Group(group[index - 1]))
+
+    parts = name.split("-")
+    total = len(parts)
+
+    start_index = 0
+    found = True
+    while found and start_index < total:
+        found = False
+        for end_index in range(start_index + 1, total + 1):
+            candidate = "-".join(parts[start_index:end_index])
+            new_group = (*group, candidate)
+            if new_group in registry.groups:
+                group = new_group
+                start_index = end_index
+                found = True
+                break
+
+    return group, "-".join(parts[start_index:])
+
+
 def load_commands(registry: CommandRegistry):
     """Let each module in `_commands` register the commands it implements."""
     modules = []
@@ -137,6 +211,7 @@ def build_registry() -> GroupRegistry:
     registry.register(("pipeline",), run_analysis_native)
 
     load_commands(registry)
+    discover_external_commands(registry)
 
     return registry
 

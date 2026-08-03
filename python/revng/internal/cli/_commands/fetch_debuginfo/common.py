@@ -20,22 +20,10 @@ from elftools.elf.elffile import ELFFile
 from elftools.elf.sections import NoteSection
 from urllib3.util import Retry
 
+from revng.internal.cli.common import cli_logger
 
-class Logger:
-    def __init__(self):
-        self.verbose = False
-
-    def log_error(self, message):
-        sys.stderr.write(message + "\n")
-
-    def log(self, message):
-        if self.verbose:
-            sys.stderr.write(message + "\n")
-
-
-logger = Logger()
-log = logger.log
-log_error = logger.log_error
+log = cli_logger.debug_log
+log_error = cli_logger.log
 
 
 session = requests.Session()
@@ -234,7 +222,7 @@ def main():
     parser.add_argument("input", help="Input file")
     args = parser.parse_args()
     if args.verbose:
-        logger.verbose = True
+        cli_logger.debug = True
 
     options = Options()
     if args.output is not None:

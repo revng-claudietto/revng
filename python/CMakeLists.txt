@@ -235,7 +235,6 @@ python_module(TARGET_NAME python-tupletree WHEEL revng MODULE_FILES
 
 set(MERGE_DYNAMIC_MODULE_FILES
     revng/internal/cli/_commands/merge_dynamic/__init__.py
-    revng/internal/cli/_commands/merge_dynamic/log.py
     revng/internal/cli/_commands/merge_dynamic/merge_dynamic.py
     revng/internal/cli/_commands/merge_dynamic/parsed_elf.py
     revng/internal/cli/_commands/merge_dynamic/util.py)

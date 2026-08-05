@@ -2,11 +2,14 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include <optional>
+
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopeExit.h"
 
 #include "revng/ADT/RecursiveCoroutine.h"
 #include "revng/Clift/CliftOpHelpers.h"
+#include "revng/Clift/LocationAddresses.h"
 #include "revng/CliftEmitC/CBackend.h"
 #include "revng/CliftEmitC/CEmitter.h"
 #include "revng/CliftEmitC/Configuration.h"
@@ -46,6 +49,17 @@ static bool hasFallthrough(mlir::Region &R) {
   return not getLastNoFallthroughStatement(R);
 }
 
+/// Whether the expression \p V feeds into is part of the same segment access,
+/// which makes \p V an inner node whose address the outer one already covers.
+static bool continuesSegmentAccess(mlir::Value V) {
+  for (mlir::Operation *User : V.getUsers())
+    if (User->getNumResults() != 0
+        and getSegmentAddress(User->getResult(0)).has_value())
+      return true;
+
+  return false;
+}
+
 enum class OperatorPrecedence {
   Parentheses,
   Comma,
@@ -76,11 +90,17 @@ class CliftToCEmitter : CEmitter {
   // at the top of the function body.
   TypeEmitterConfiguration Configuration;
 
+  // Configuration controlling how the function body itself is emitted.
+  BodyEmitterConfiguration BodyConfiguration;
+
 public:
   CliftToCEmitter(ptml::CTokenEmitter &Emitter,
                   const CDataModel &DataModel,
-                  TypeEmitterConfiguration Configuration) :
-    CEmitter(Emitter, DataModel), Configuration(Configuration) {}
+                  TypeEmitterConfiguration Configuration,
+                  BodyEmitterConfiguration BodyConfiguration = {}) :
+    CEmitter(Emitter, DataModel),
+    Configuration(Configuration),
+    BodyConfiguration(BodyConfiguration) {}
 
   using CEmitter::CEmitter;
 
@@ -881,6 +901,21 @@ public:
 
     if (PrintParentheses)
       Tokens.emitPunctuator(CTE::Punctuator::RightParenthesis);
+
+    // The address is emitted on the outermost expression of an access, so that
+    // a single comment covers it whole.
+    if (BodyConfiguration.AnnotateSegmentAddresses
+        and not continuesSegmentAccess(V)) {
+      if (std::optional<MetaAddress> Address = getSegmentAddress(V)) {
+        // The address alone: the type a `MetaAddress` also carries says
+        // nothing here, since a segment always holds data.
+        std::string Comment = " 0x"
+                              + llvm::Twine::utohexstr(Address->address()).str()
+                              + " ";
+        Tokens.emitSpace();
+        Tokens.emitComment(Comment, CTE::CommentKind::Block);
+      }
+    }
   }
 
   RecursiveCoroutine<void> emitExpressionRegion(mlir::Region &R) {
@@ -1479,7 +1514,11 @@ public:
 
 void decompile(FunctionOp Function,
                ptml::CTokenEmitter &Emitter,
-               TypeEmitterConfiguration Configuration) {
-  CliftToCEmitter(Emitter, getDataModel(Function), Configuration)
+               TypeEmitterConfiguration Configuration,
+               BodyEmitterConfiguration BodyConfiguration) {
+  CliftToCEmitter(Emitter,
+                  getDataModel(Function),
+                  Configuration,
+                  BodyConfiguration)
     .emitFunction(Function);
 }

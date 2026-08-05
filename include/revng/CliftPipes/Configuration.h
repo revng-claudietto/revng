@@ -16,6 +16,10 @@ enum class EmissionMode {
 struct CEmissionPipeConfiguration {
   bool DisableMarkup = false;
   EmissionMode Mode = EmissionMode::Recompilable;
+
+  /// Annotate every expression reaching into a segment with the address it
+  /// resolves to, as a comment.
+  bool AnnotateSegmentAddresses = false;
 };
 
 } // namespace revng::pypeline::piperuns
@@ -40,6 +44,8 @@ struct llvm::yaml::MappingTraits<detail::PipeConfiguration> {
   static void mapping(IO &TheIO, ::detail::PipeConfiguration &Value) {
     TheIO.mapOptional("disable-markup", Value.DisableMarkup);
     TheIO.mapOptional("emission-mode", Value.Mode);
+    TheIO.mapOptional("annotate-segment-addresses",
+                      Value.AnnotateSegmentAddresses);
   }
 };
 

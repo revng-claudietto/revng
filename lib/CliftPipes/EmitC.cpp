@@ -61,10 +61,14 @@ void EmitC::runOnFunction(const model::Function &Function) {
     revng_abort("Unsupported emission style.");
   };
 
+  BodyEmitterConfiguration BEConfiguration = {
+    .AnnotateSegmentAddresses = Configuration.AnnotateSegmentAddresses,
+  };
+
   ptml::CTokenEmitter Emitter(Configuration.DisableMarkup ?
                                 ptml::Tagging::Disabled :
                                 ptml::Tagging::Enabled);
-  decompile(MLIRFunction, Emitter, TEConfiguration);
+  decompile(MLIRFunction, Emitter, TEConfiguration, BEConfiguration);
 
   auto OS = Output.getOStream(Object);
   *OS << Emitter.extract();

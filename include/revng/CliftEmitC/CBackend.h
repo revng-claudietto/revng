@@ -13,4 +13,5 @@
 
 void decompile(clift::FunctionOp Function,
                ptml::CTokenEmitter &Emitter,
-               TypeEmitterConfiguration Configuration = {});
+               TypeEmitterConfiguration Configuration = {},
+               BodyEmitterConfiguration BodyConfiguration = {});

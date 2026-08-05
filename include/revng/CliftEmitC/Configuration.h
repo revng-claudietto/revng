@@ -40,3 +40,12 @@ struct TypeEmitterConfiguration {
   /// intentionally not syntactically valid as a single translation unit.
   bool InlineStackFrameType = false;
 };
+
+/// Configuration for emitting the body of a function, as opposed to the type
+/// definitions it refers to.
+struct BodyEmitterConfiguration {
+  /// Emit, after every expression reaching into a segment at a constant
+  /// offset, a comment holding the address it resolves to. This lets the
+  /// reader cross-reference the decompiled code against the raw binary.
+  bool AnnotateSegmentAddresses = false;
+};

@@ -132,6 +132,32 @@ inline SortedVector<MetaAddress> getUserAddressSet(mlir::Value Value) {
   return Addresses;
 }
 
+/// Whether \p Address identifies \p Jump on its own, i.e. no other jump of the
+/// same function was lifted from that same instruction.
+///
+/// The conditional branch closing a loop lifts to a `break_to` and a
+/// `continue_to` sharing its address, and a `goto` can share one with a jump
+/// too, so an address is not always enough to tell one jump from another.
+inline bool isUnsharedJumpAddress(mlir::Operation *Jump, MetaAddress Address) {
+  mlir::Operation *Root = Jump->getParentOfType<clift::FunctionOp>();
+  if (Root == nullptr) {
+    Root = Jump;
+    while (mlir::Operation *Parent = Root->getParentOp())
+      Root = Parent;
+  }
+
+  bool Unshared = true;
+  Root->walk([&](clift::JumpStatementOpInterface Other) {
+    if (Other.getOperation() == Jump)
+      return mlir::WalkResult::advance();
+    if (getOperationAddress(Other) != Address)
+      return mlir::WalkResult::advance();
+    Unshared = false;
+    return mlir::WalkResult::interrupt();
+  });
+  return Unshared;
+}
+
 /// Gather the set of instruction addresses identifying a statement.
 ///
 /// The addresses are those attached to the operations in the statement's own
@@ -162,10 +188,17 @@ getStatementExpressionAddresses(mlir::Operation *Op) {
     // `goto` label
     return getUserAddressSet(AssignLabel.getLabel());
 
-  } else if (mlir::isa<clift::GotoOp>(Op)) {
-    // `goto`
+  } else if (mlir::isa<clift::JumpStatementOpInterface>(Op)) {
+
+    // A jump stands for a single instruction, the branch it was lifted from, so
+    // that address identifies it. Two jumps lifted from the same branch, as the
+    // `break_to` and `continue_to` closing a loop are, cannot be told apart
+    // that way, and a comment on either would as often as not come out on the
+    // other: leave those with no address set, which keeps them out of comment
+    // placement altogether.
     SortedVector<MetaAddress> Addresses;
-    if (MetaAddress Address = getOperationAddress(Op); Address.isValid())
+    MetaAddress Address = getOperationAddress(Op);
+    if (Address.isValid() and isUnsharedJumpAddress(Op, Address))
       Addresses.insert(Address);
 
     return Addresses;

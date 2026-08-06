@@ -303,6 +303,7 @@ set(FILECHECK_TESTS
     clift/model-verify/unknown-attributes/struct.mlir
     clift/model-verify/unknown-attributes/valid.mlir
     clift/name-import/function-body/comments.mlir
+    clift/name-import/function-body/jump-comments.mlir
     clift/name-import/function-body/local-label.mlir
     clift/name-import/function-body/local-variable.mlir
     clift/name-import/header/enum.mlir

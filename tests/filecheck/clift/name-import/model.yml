@@ -165,6 +165,21 @@ Functions:
           - "0x40001005:Code_x86_64"
         Body: "hello"
 
+  - Entry: "0x40001009:Code_x86_64"
+    Name: "fun_0x40001009"
+    Prototype:
+      Kind: DefinedType
+      Definition: "/TypeDefinitions/1004-CABIFunctionDefinition"
+    Comments:
+      - Index: 0
+        Location:
+          - "0x4000100a:Code_x86_64"
+        Body: "on the lone break"
+      - Index: 1
+        Location:
+          - "0x4000100b:Code_x86_64"
+        Body: "on one of two jumps sharing an address"
+
 Segments:
   - StartAddress: "0x40001000:Generic64"
     VirtualSize: 0x1000

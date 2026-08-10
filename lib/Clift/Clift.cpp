@@ -1311,11 +1311,16 @@ mlir::LogicalResult StringOp::verify() {
     return emitOpError() << getOperationName()
                          << " result must have const array type.";
 
+  // A string standing in for a segment field keeps the character type the
+  // model gave that field, which is `uint8_t` (see `emit-strings`), while one
+  // coming from the LLVM IR has no model type to keep and uses `number8_t`.
   auto CharT = mlir::dyn_cast<IntegerType>(ArrayT.getElementType());
-  if (not CharT or CharT.getKind() != IntegerKind::Number
-      or CharT.getSize() != 1)
+  if (not CharT or CharT.getSize() != 1
+      or (CharT.getKind() != IntegerKind::Number
+          and CharT.getKind() != IntegerKind::Unsigned))
     return emitOpError() << getOperationName()
-                         << " result must have number8_t element type.";
+                         << " result must have number8_t or uint8_t element"
+                            " type.";
 
   if (ArrayT.getElementsCount() != getValue().size() + 1)
     return emitOpError() << getOperationName()

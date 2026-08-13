@@ -295,12 +295,8 @@ llvm::Error EditByName::run(Model &Model,
 
   // Apply the variable edits, replacing any variable already located at the
   // same set of addresses.
-  for (model::LocalVariable &Variable : NewVariables) {
-    ModelFunction.LocalVariables().erase_if([&](const auto &Existing) {
-      return Existing.Location() == Variable.Location();
-    });
-    ModelFunction.LocalVariables().insert(std::move(Variable));
-  }
+  for (model::LocalVariable &Variable : NewVariables)
+    applyLocalVariableEdit(ModelFunction, std::move(Variable));
 
   // Apply the label edits, replacing any label already located at the same set
   // of addresses.

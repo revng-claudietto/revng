@@ -45,7 +45,7 @@ namespace revng::pypeline::analyses {
 /// one, so those remain the business of \ref EditCBody.
 ///
 /// A directive an edit leaves out keeps what the entity already has, so
-/// renaming a variable does not drop the comment it carries.
+/// renaming a variable does not drop the type or the comment it carries.
 ///
 /// Every edit is applied on its own. One that cannot be applied is dropped and
 /// reported on the `edit-by-name` logger, leaving the others alone. A local

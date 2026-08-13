@@ -143,6 +143,24 @@ makeLocalVariableEdit(clift::LocalVariableOp Variable,
   return Result;
 }
 
+void applyLocalVariableEdit(model::Function &ModelFunction,
+                            model::LocalVariable &&Variable) {
+  if (Variable.Type().isEmpty()) {
+    for (const model::LocalVariable &Existing :
+         ModelFunction.LocalVariables()) {
+      if (Existing.Location() == Variable.Location()) {
+        Variable.Type() = Existing.Type().copy();
+        break;
+      }
+    }
+  }
+
+  ModelFunction.LocalVariables().erase_if([&](const auto &Existing) {
+    return Existing.Location() == Variable.Location();
+  });
+  ModelFunction.LocalVariables().insert(std::move(Variable));
+}
+
 llvm::Expected<model::GotoLabel>
 makeGotoLabelEdit(clift::MakeLabelOp Label,
                   const std::optional<std::string> &NewName,

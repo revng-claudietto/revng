@@ -54,9 +54,9 @@ namespace revng::pypeline::analyses {
 ///   reach past its end, so `RETYPE` naming one is dropped as well.
 ///
 /// A directive an annotation leaves out keeps what the entity already has, so
-/// renaming a variable does not drop the comment on it. The statement comments
-/// are the exception: the submitted C is the whole account of those, and the
-/// ones it does not carry are dropped.
+/// renaming a variable drops neither the type nor the comment on it. The
+/// statement comments are the exception: the submitted C is the whole account
+/// of those, and the ones it does not carry are dropped.
 ///
 /// That address set is all a local variable or a goto label is identified by,
 /// so two of them used only by the same instructions cannot be told apart. An

@@ -50,6 +50,15 @@ makeLocalVariableEdit(clift::LocalVariableOp Variable,
                       const ResolvedTypeMap &ResolvedTypes,
                       const AmbiguousLocations &Ambiguous);
 
+/// Record \p Variable in \p ModelFunction, replacing whatever was located at
+/// the same addresses.
+///
+/// An edit replaces the model entry rather than amending it, so a `Retype` the
+/// edit does not carry is taken from the entry being replaced. The name and the
+/// comment come off the decompiled code instead, which already shows them.
+void applyLocalVariableEdit(model::Function &ModelFunction,
+                            model::LocalVariable &&Variable);
+
 /// Build the model entry renaming and/or commenting a goto label, located by
 /// the addresses of the instructions that use the label.
 ///

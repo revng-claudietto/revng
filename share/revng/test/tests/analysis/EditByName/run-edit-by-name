@@ -16,7 +16,8 @@ set -euo pipefail
 #   - `label_0`  the goto label           -> Rename + Comment.
 #
 # A second run then covers what an edit leaves out: a `Rename` on its own keeps
-# the comment the entity carries, and a `Comment` on its own needs no `Rename`.
+# the comment and the type the entity carries, and a `Comment` on its own needs
+# no `Rename`.
 # A third one covers a `Retype` naming a type of a different size than the
 # variable, which is dropped like the ones below.
 #
@@ -175,11 +176,14 @@ EOF
 
 analyze "$PROJECT/second-edit.yml" "$PROJECT/second-analyze.log"
 
-# The rename kept the comment the first run attached.
+# The rename kept the comment and the type the first run attached.
 assert_model_string "$FUNCTION" \
   '.LocalVariables[] | select(.Name == "renamed_local_again") | .Comment' \
   "how many entries are left" \
   "renaming a local variable dropped the comment it carried"
+assert_model "$FUNCTION" \
+  '.LocalVariables[] | select(.Name == "renamed_local_again") | .Type.Size' 8 \
+  "renaming a local variable dropped the type it carried"
 
 # A `Comment` on its own is enough: the variable keeps the name it had.
 assert_model_string "$FUNCTION" \

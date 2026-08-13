@@ -30,7 +30,10 @@ module attributes { clift.module } {
       %0 = clift.imm 0 : !int32_t
       %1 = clift.bitcast %0 : !int32_t -> !uint32_t
       clift.yield %1 : !uint32_t
-    } attributes { clift.comments = ["normalized by clang-format"] }
+    } attributes {
+      clift.comments = [{ handle = "/statement-comment/0x40001004:Code_x86_64/0",
+                          body = "normalized by clang-format" }]
+    }
   // CHECK: }
   }
 }

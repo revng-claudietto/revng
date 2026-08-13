@@ -25,8 +25,10 @@ module attributes { clift.module } {
       %0 = clift.imm 0 : !int32_t loc(#loc1)
       // CHECK: clift.yield %0 : !int32_t
       clift.yield %0 : !int32_t
+    // Each comment is imported along with the handle that locates it in the
+    // model, which is what an edit to it needs.
     // CHECK: } attributes {
-    // CHECK: clift.comments = ["hello"]
+    // CHECK: clift.comments = [{body = "hello", handle = "/statement-comment/0x40001004:Code_x86_64/0"}]
     // CHECK: }
     }
   }

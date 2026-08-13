@@ -1145,7 +1145,8 @@ definitions:
     fields:
       - name: Index
         doc: |-
-          The index of the comment.
+          The index of the comment, which is also its position in `Comments()`:
+          the indices of a function start at zero and are contiguous.
 
         # Note that this is used exclusively to simplify lookup of
         # the *existing* comments. This way address set doesn't need to be

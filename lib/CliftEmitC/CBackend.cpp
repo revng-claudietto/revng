@@ -1344,23 +1344,21 @@ public:
     mlir::Operation *Op = Statement.getOperation();
 
     if (auto Comments = getComments(Statement)) {
-      FunctionOp ParentFunction = Op->getParentOfType<FunctionOp>();
-      auto FLoc = pipeline::locationFromString(revng::ranks::Function,
-                                               ParentFunction.getHandle());
-      revng_assert(FLoc.has_value());
+      for (mlir::Attribute CommentAttr : Comments) {
+        auto Comment = mlir::cast<mlir::DictionaryAttr>(CommentAttr);
 
-      for (auto [CommentIndex, CommentAttr] : llvm::enumerate(Comments)) {
-        auto Location = pipeline::location(revng::ranks::StatementComment,
-                                           FLoc->at(revng::ranks::Function),
-                                           CommentIndex);
+        // The handle is the model location of the comment, which is what an
+        // edit to it needs. The position of the comment in this list is not
+        // it: a statement carries only the comments placed on it.
+        auto Handle = mlir::cast<mlir::StringAttr>(Comment.get("handle"));
 
         auto Guard = Tokens.enterRegion(CTE::RegionKind::Commentable,
-                                        Location.toString());
+                                        Handle.getValue());
 
         // TODO: Add a comment formatting layer on top of CE.
         //       At least spaces at the start of each line would be nice.
         auto CE = Tokens.emitComment(CTE::CommentKind::Line);
-        CE.emit(mlir::cast<mlir::StringAttr>(CommentAttr).getValue());
+        CE.emit(mlir::cast<mlir::StringAttr>(Comment.get("body")).getValue());
         CE.emit("\n");
       }
     }

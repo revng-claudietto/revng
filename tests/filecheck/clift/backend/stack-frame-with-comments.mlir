@@ -53,7 +53,8 @@ module attributes {clift.module} {
       handle = "/stack-frame-variable/0x1000:Code_x86_64",
       name = "frame_var",
       clift.stack_frame = true,
-      clift.comments = ["variable comment"]
+      clift.comments = [{ handle = "/statement-comment/0x1000:Code_x86_64/0",
+                          body = "variable comment" }]
     }
   }
 }

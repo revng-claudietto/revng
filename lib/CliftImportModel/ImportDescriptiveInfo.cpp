@@ -686,21 +686,38 @@ public:
 
   //===-------------------------- Comment import --------------------------===//
 
+  /// Attach the comments placed on \p Op, each as a `handle`/`body` pair.
+  ///
+  /// The handle is the model location of the comment, which is what an edit to
+  /// it needs and what the backend emits. It cannot be rebuilt further down:
+  /// a statement carries only the comments placed on it, so the position of a
+  /// comment in this list is not the one it has in the model.
   mlir::LogicalResult visitStatementOp(clift::StatementOpInterface Op) {
     const auto &Comments = CurrentFunction->Comments.getComments(Op);
 
     if (not Comments.empty()) {
+      mlir::MLIRContext *Context = Op->getContext();
       llvm::SmallVector<mlir::Attribute> CommentAttrList;
 
-      const auto &ModelComments = CurrentFunction->Model.Comments();
+      const model::Function &ModelFunction = CurrentFunction->Model;
       for (const auto &Comment : Comments) {
-        auto Body = ModelComments.at(Comment.CommentIndex).Body();
-        CommentAttrList.push_back(mlir::StringAttr::get(Op->getContext(),
-                                                        Body));
+        uint64_t Index = Comment.CommentIndex;
+        std::string Handle = pipeline::locationString(rr::StatementComment,
+                                                      ModelFunction.key(),
+                                                      Index);
+
+        mlir::NamedAttribute Fields[] = {
+          { mlir::StringAttr::get(Context, "handle"),
+            mlir::StringAttr::get(Context, Handle) },
+          { mlir::StringAttr::get(Context, "body"),
+            mlir::StringAttr::get(Context,
+                                  ModelFunction.Comments().at(Index).Body()) }
+        };
+        CommentAttrList.push_back(mlir::DictionaryAttr::get(Context, Fields));
       }
 
       Op->setAttr("clift.comments",
-                  mlir::ArrayAttr::get(Op->getContext(), CommentAttrList));
+                  mlir::ArrayAttr::get(Context, CommentAttrList));
     }
 
     return mlir::success();

@@ -65,7 +65,7 @@ It reacts to exactly three kinds of edit, all written as comments:
 
 * a plain comment on the line before a statement becomes a comment attached to that statement;
 * a `// RENAME: <name>` comment before a local variable's declaration renames the variable, and before a goto label renames the label;
-* a `// RETYPE: <type>` comment before a local variable's declaration changes its type.
+* a `// RETYPE: <type>` comment before a local variable's declaration changes its type, as long as the type is the same size as the variable.
 
 Each of these must be on its own line, before the statement it refers to.
 A comment placed at the end of a line, after the code, is ignored.
@@ -191,6 +191,7 @@ The comment belongs to the variable rather than to a point in the code, so it is
 
 Every edit stands on its own.
 One that cannot be applied -- naming something the function does not have, retyping a goto label, or naming a type the model does not know -- is dropped, and the others still land.
+So is a `Retype` naming a type of a different size than the variable: retyping says what the variable holds, not how wide the machine code reads and writes it, and those accesses would then reach past its end.
 As with `edit-c-body`, the `edit-by-name` logger says which ones were dropped and why:
 
 ```

@@ -112,6 +112,31 @@ makeLocalVariableEdit(clift::LocalVariableOp Variable,
     auto Iterator = ResolvedTypes.find(*NewTypeName);
     if (Iterator == ResolvedTypes.end() or Iterator->second.isEmpty())
       return revng::createError("unknown type: " + *NewTypeName);
+
+    // The decompiled code assigns to the variable, which a `const` type leaves
+    // nothing to do. Note that this is about the variable itself: a pointer to
+    // something const, `const char *`, is not const and goes through.
+    if (Iterator->second->isConst())
+      return revng::createError("a local variable cannot be `const`");
+
+    // Retyping a variable says what it holds; it does not change how wide the
+    // machine code reads and writes it, and those accesses are what the
+    // decompiled code is made of. A narrower type would have them reach past
+    // the end of the variable, so rev.ng cannot render one.
+    auto Size = Iterator->second->size();
+    if (not Size.has_value())
+      return revng::createError("`" + *NewTypeName + "` has no size");
+
+    uint64_t CurrentSize = mlir::cast<clift::ObjectType>(Variable.getType())
+                             .getObjectSize();
+    if (*Size != CurrentSize) {
+      return revng::createError("`" + *NewTypeName + "` is "
+                                + std::to_string(*Size)
+                                + " bytes, while this variable is accessed "
+                                + std::to_string(CurrentSize)
+                                + " bytes at a time");
+    }
+
     Result.Type() = Iterator->second.copy();
   }
   Result.Location() = std::move(Location);

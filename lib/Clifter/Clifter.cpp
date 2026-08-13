@@ -89,30 +89,6 @@ restoreInsertionPointAfter(mlir::OpBuilder &Builder,
 
 using ScopeGraphPostDomTree = llvm::PostDomTreeOnView<llvm::BasicBlock, Scope>;
 
-// Gather the addresses of the instructions using \p I. If any user cannot be
-// attributed to an address, an empty set is returned.
-//
-// This mirrors the gathering performed on the emitted Clift when assigning
-// names (see `importDescriptiveInfo`), so that, given a `Location` in the
-// model, both identify the same local variable.
-static SortedVector<MetaAddress> getUserAddressSet(const llvm::Instruction *I) {
-  SortedVector<MetaAddress> AddressSet;
-
-  for (const llvm::User *User : I->users()) {
-    const auto *UserInstruction = llvm::dyn_cast<llvm::Instruction>(User);
-    if (UserInstruction == nullptr)
-      return {};
-
-    auto Address = tryExtractAddress(*UserInstruction);
-    if (not Address.has_value())
-      return {};
-
-    AddressSet.emplace(*Address);
-  }
-
-  return AddressSet;
-}
-
 class ClifterImpl final : public Clifter {
   class FunctionClifter;
 
@@ -1656,20 +1632,17 @@ private:
         } else {
           revng_assert(*A->getAllocationSizeInBits(*C.DataLayout) % 8 == 0);
 
-          // Identify this variable in the model the same way names are
-          // assigned later down the pipeline (see `importDescriptiveInfo`):
-          // through the set of addresses of the instructions using it.
-          // If the user specified a type for it, it takes precedence over
-          // the one the LLVM IR suggests.
-          const model::LocalVariable *Variable = //
-            ModelFunction.findLocalVariable(getUserAddressSet(A));
-          if (Variable != nullptr and not Variable->Type().isEmpty()) {
-            Type = C.importType<clift::ValueType>(*Variable->Type());
-          } else {
-            llvm::Type *Allocated = A->getAllocatedType();
-            revng_assert(Allocated->isSized());
-            Type = C.importLLVMType(Allocated);
-          }
+          // The type the LLVM IR suggests. A type the user chose for this
+          // variable takes precedence over it, but that cannot be looked up
+          // here: a variable is identified by the addresses of the statements
+          // using it, and those are the Clift statements this function is on
+          // its way to emitting, not the LLVM instructions using the alloca.
+          // The two do not agree, so the model type is applied further down
+          // the pipeline, once the body is there to identify it by (see
+          // `importDescriptiveInfo`).
+          llvm::Type *Allocated = A->getAllocatedType();
+          revng_assert(Allocated->isSized());
+          Type = C.importLLVMType(Allocated);
         }
 
         mlir::Location Loc = C.getLocation(A);

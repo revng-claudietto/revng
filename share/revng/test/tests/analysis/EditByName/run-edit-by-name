@@ -17,6 +17,8 @@ set -euo pipefail
 #
 # A second run then covers what an edit leaves out: a `Rename` on its own keeps
 # the comment the entity carries, and a `Comment` on its own needs no `Rename`.
+# A third one covers a `Retype` naming a type of a different size than the
+# variable, which is dropped like the ones below.
 #
 # The rest covers the edits that cannot be applied. Those are dropped and
 # reported on the `edit-by-name` logger, one at a time, leaving every other edit
@@ -86,7 +88,7 @@ Function: $(function_address "$FUNCTION")
 Edits:
   - Target: var_0
     Rename: renamed_local
-    Retype: "uint32_t"
+    Retype: "uint64_t"
     Comment: how many entries are left
   - Target: var_4
     Rename: renamed_later_local
@@ -96,7 +98,7 @@ Edits:
   - Target: no_such_entity
     Rename: dropped_unknown_target
   - Target: label_0
-    Retype: "uint32_t"
+    Retype: "uint64_t"
   - Target: var_1
   - Target: var_2
     Rename: dropped_unknown_type
@@ -106,13 +108,13 @@ EOF
 analyze "$PROJECT/edit.yml" "$PROJECT/analyze.log"
 
 # Both renames and the retype must reach the model. A rename-only variable has
-# no `Type`, so `renamed_local` carrying a 4-byte type (uint32_t) proves the
-# retype landed.
+# no `Type` at all, so `renamed_local` carrying one proves the retype landed.
 assert_model "$FUNCTION" \
   '[.LocalVariables[] | select(.Name == "renamed_local")] | length' 1 \
   "the local variable rename did not reach the model"
 assert_model "$FUNCTION" \
-  '.LocalVariables[] | select(.Name == "renamed_local") | .Type.Size' 4 \
+  '.LocalVariables[] | select(.Name == "renamed_local") | .Type.PrimitiveKind' \
+  '"Unsigned"' \
   "the local variable retype did not reach the model"
 assert_model "$FUNCTION" \
   '[.LocalVariables[] | select(.Name == "renamed_later_local")] | length' 1 \
@@ -150,10 +152,11 @@ done
 assert_model "$FUNCTION" '[.GotoLabels[] | select(has("Type"))] | length' 0 \
   "a goto label was given a type"
 
-# The renames and the comments round-trip back into the re-emitted code (a type
-# change is model-only and does not reach emit-c, so it is not checked here).
+# The renames, the retype and the comments all round-trip back into the
+# re-emitted code. The retype is checked on the declaration, which is where the
+# type a variable was given is written.
 REEMIT="$(revng -C "$PROJECT" project artifact emit-c "$FUNCTION" | revng ptml)"
-for NAME in renamed_local renamed_later_local "renamed_goto_label:" \
+for NAME in "uint64_t renamed_local" renamed_later_local "renamed_goto_label:" \
             "how many entries are left" "start the whole thing over"; do
   grep -qF "$NAME" <<< "$REEMIT" || fail "re-emitted code is missing: $NAME"
 done
@@ -184,3 +187,20 @@ assert_model_string "$FUNCTION" \
   "set without renaming" \
   "a comment-only edit did not reach the model"
 
+# A `Retype` naming a type of a different size than the variable is dropped:
+# the accesses around it stay as wide as the machine code made them, so they
+# would reach past the end of a narrower variable. This one is known to be
+# eight bytes, since the `uint64_t` above was applied to it.
+cat > "$PROJECT/narrow-edit.yml" <<EOF
+Function: $(function_address "$FUNCTION")
+Edits:
+  - Target: renamed_local_again
+    Retype: "uint32_t"
+EOF
+
+analyze "$PROJECT/narrow-edit.yml" "$PROJECT/narrow-analyze.log"
+
+assert_reported "bytes at a time" "$PROJECT/narrow-analyze.log"
+assert_model "$FUNCTION" \
+  '.LocalVariables[] | select(.Name == "renamed_local_again") | .Type.Size' 8 \
+  "a retype that cannot be applied changed the type the variable had"

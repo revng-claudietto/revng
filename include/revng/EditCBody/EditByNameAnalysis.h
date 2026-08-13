@@ -33,6 +33,11 @@ namespace revng::pypeline::analyses {
 /// `char [8]`. `Comment` is emitted above the declaration of the variable, or
 /// above the label, and applies to both; `Retype` applies to a variable only.
 ///
+/// `Retype` says what the variable holds, not how wide the machine code reads
+/// and writes it: the accesses around it keep their own type and reinterpret
+/// the variable. A type of a different size would have them reach past its
+/// end, so a `Retype` naming one is among the edits dropped below.
+///
 /// This covers the same edits `RENAME:`/`RETYPE:` comments express in
 /// \ref EditCBody, without submitting the body: they need no position in the
 /// code, only the entity they name. `Comment` is the comment belonging to the

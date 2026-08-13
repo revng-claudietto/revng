@@ -48,6 +48,11 @@ namespace revng::pypeline::analyses {
 ///   instead, recorded the same way as a `GotoLabel`; a label has no type, so
 ///   `RETYPE` on one is dropped, leaving the rest of the annotation alone.
 ///
+///   `RETYPE` says what the variable holds, not how wide the machine code
+///   reads and writes it: the accesses around it keep their own type and
+///   reinterpret the variable. A type of a different size would have them
+///   reach past its end, so `RETYPE` naming one is dropped as well.
+///
 /// A directive an annotation leaves out keeps what the entity already has, so
 /// renaming a variable does not drop the comment on it. The statement comments
 /// are the exception: the submitted C is the whole account of those, and the

@@ -305,6 +305,7 @@ set(FILECHECK_TESTS
     clift/name-import/function-body/comments.mlir
     clift/name-import/function-body/jump-comments.mlir
     clift/name-import/function-body/local-label.mlir
+    clift/name-import/function-body/local-variable-type.mlir
     clift/name-import/function-body/local-variable.mlir
     clift/name-import/header/enum.mlir
     clift/name-import/header/function-cabi.mlir

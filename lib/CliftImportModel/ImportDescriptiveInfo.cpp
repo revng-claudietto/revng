@@ -11,6 +11,7 @@
 #include "mlir/IR/RegionGraphTraits.h"
 
 #include "revng/Clift/Clift.h"
+#include "revng/Clift/CliftOpHelpers.h"
 #include "revng/Clift/CliftTypes.h"
 #include "revng/Clift/Helpers.h"
 #include "revng/Clift/LocationAddresses.h"
@@ -724,11 +725,291 @@ public:
   }
 };
 
+/// Whether \p Use has to be an lvalue, i.e. something that can be assigned to
+/// or have its address taken.
+///
+/// These are the operands Clift constrains with `Clift_LValueOperand`, plus the
+/// two that hand lvalue-ness on to their own result. Anything not listed takes
+/// a value, and a value is all it is given.
+bool requiresLValue(mlir::OpOperand &Use) {
+  mlir::Operation *User = Use.getOwner();
+  bool IsFirstOperand = Use.getOperandNumber() == 0;
+
+  if (mlir::isa<clift::AddressofOp>(User))
+    return true;
+
+  if (mlir::isa<clift::AssignOp>(User))
+    return IsFirstOperand;
+
+  if (mlir::isa<clift::IncrementOp,
+                clift::DecrementOp,
+                clift::PostIncrementOp,
+                clift::PostDecrementOp>(User))
+    return true;
+
+  // `a.b` can be assigned to when `a` can, so the base has to stay an lvalue.
+  // The indirect form, `a->b`, can be assigned to whatever `a` is.
+  if (mlir::isa<clift::DirectAccessOp>(User))
+    return IsFirstOperand;
+
+  if (mlir::isa<clift::IndirectAccessOp>(User))
+    return false;
+
+  // A comma expression can be assigned to when its right operand can.
+  if (mlir::isa<clift::CommaOp>(User))
+    return not IsFirstOperand;
+
+  return false;
+}
+
+/// An expression standing for \p Variable read at \p OldType, to put in the
+/// place of \p Use.
+///
+/// Where the use only reads the variable this is a plain cast. Where it needs
+/// something assignable it goes through the variable's address,
+/// `*(OldType *) &variable`, which is assignable in turn. Both carry the
+/// location of the operation they are going into, so the addresses the variable
+/// is identified by come out of this unchanged.
+mlir::Value reinterpretVariable(mlir::OpBuilder &Builder,
+                                mlir::Value Variable,
+                                clift::ValueType OldType,
+                                uint64_t PointerSize,
+                                mlir::OpOperand &Use) {
+  mlir::Operation *User = Use.getOwner();
+  Builder.setInsertionPoint(User);
+  mlir::Location Loc = User->getLoc();
+
+  if (not requiresLValue(Use))
+    return Builder.create<clift::BitCastOp>(Loc, OldType, Variable);
+
+  auto NewPointer = clift::PointerType::get(Variable.getType(), PointerSize);
+  auto OldPointer = clift::PointerType::get(OldType, PointerSize);
+
+  mlir::Value Address = Builder.create<clift::AddressofOp>(Loc,
+                                                           NewPointer,
+                                                           Variable);
+  Address = Builder.create<clift::BitCastOp>(Loc, OldPointer, Address);
+  return Builder.create<clift::IndirectionOp>(Loc, OldType, Address);
+}
+
+/// Mark \p Cast as a conversion C performs on its own, so that it is not
+/// written out. Between two integer types it is, and that is the only pair a
+/// retype puts in a place where C converts without being told to.
+void markImplicitBetweenIntegers(clift::BitCastOp Cast,
+                                 clift::ValueType From,
+                                 clift::ValueType To) {
+  if (mlir::isa<clift::IntegralType>(clift::unwrapTypedefs(From))
+      and mlir::isa<clift::IntegralType>(clift::unwrapTypedefs(To)))
+    Cast->setAttr("clift.implicit", mlir::UnitAttr::get(Cast.getContext()));
+}
+
+/// The assignment \p Use is the left-hand side of, if the value it produces
+/// goes nowhere.
+///
+/// Such an assignment keeps the variable on the left and converts what is
+/// stored into it instead, which reads as an assignment to the variable rather
+/// than as a write through its address. One whose value is read on has to keep
+/// that value's type, so it takes the address form like everything else.
+clift::AssignOp asDiscardedAssignment(mlir::OpOperand &Use) {
+  auto Assign = mlir::dyn_cast<clift::AssignOp>(Use.getOwner());
+  if (not Assign or Use.getOperandNumber() != 0)
+    return {};
+
+  if (not clift::isDiscarded(Assign.getResult()))
+    return {};
+
+  return Assign;
+}
+
+/// Convert what \p Assign stores into the type its left-hand side, the retyped
+/// variable, now has.
+void convertAssignedValue(mlir::OpBuilder &Builder,
+                          clift::AssignOp Assign,
+                          clift::ValueType OldType) {
+  auto NewType = mlir::cast<clift::ValueType>(Assign.getLhs().getType());
+
+  Builder.setInsertionPoint(Assign);
+  auto Cast = Builder.create<clift::BitCastOp>(Assign.getLoc(),
+                                               NewType,
+                                               Assign.getRhs());
+  markImplicitBetweenIntegers(Cast, OldType, NewType);
+
+  Assign->setOperand(1, Cast);
+  Assign.getResult().setType(NewType);
+}
+
+/// Give \p Variable the type the user chose for it, leaving every access to it
+/// at the type it already has.
+///
+/// Retyping a variable says what it holds, not how wide the machine code reads
+/// and writes it, so the accesses keep their own type and reinterpret the
+/// variable rather than convert it. \p NewType is as wide as the old one, so
+/// none of them reaches outside the variable.
+void retypeLocalVariable(clift::LocalVariableOp Variable,
+                         clift::ValueType NewType,
+                         uint64_t PointerSize) {
+  mlir::Value Result = Variable.getResult();
+  auto OldType = mlir::cast<clift::ValueType>(Result.getType());
+  if (OldType == NewType)
+    return;
+
+  mlir::OpBuilder Builder(Variable.getContext());
+
+  // Take the uses before touching any of them: adapting one adds a use of its
+  // own.
+  auto collectUses = [](mlir::Value Value) {
+    llvm::SmallVector<mlir::OpOperand *> Uses;
+    for (mlir::OpOperand &Use : Value.getUses())
+      Uses.push_back(&Use);
+    return Uses;
+  };
+
+  auto Adapt = [&](mlir::Value Value, llvm::ArrayRef<mlir::OpOperand *> Uses) {
+    // The assignments to the variable are left for last: one that also reads it
+    // on its right-hand side has to have that read adapted first, or converting
+    // the right-hand side would convert the adaptation instead.
+    llvm::SmallVector<clift::AssignOp> Assignments;
+
+    for (mlir::OpOperand *Use : Uses) {
+      // `clift.require` marks where the variable has to be in scope rather than
+      // accessing it, and takes the variable itself and nothing else.
+      if (mlir::isa<clift::RequireOp>(Use->getOwner()))
+        continue;
+
+      if (clift::AssignOp Assign = asDiscardedAssignment(*Use))
+        Assignments.push_back(Assign);
+      else
+        Use->set(reinterpretVariable(Builder,
+                                     Value,
+                                     OldType,
+                                     PointerSize,
+                                     *Use));
+    }
+
+    for (clift::AssignOp Assign : Assignments)
+      convertAssignedValue(Builder, Assign, OldType);
+  };
+
+  auto Uses = collectUses(Result);
+  Result.setType(NewType);
+  Adapt(Result, Uses);
+
+  mlir::Region &Initializer = Variable.getInitializer();
+  if (Initializer.empty())
+    return;
+
+  // A variable assigned right where it is declared carries the assignment in
+  // its initializer, and an argument standing for the variable itself along
+  // with it. That argument is the variable, so it is retyped the same way.
+  if (Initializer.getNumArguments() != 0) {
+    mlir::BlockArgument Argument = Initializer.getArgument(0);
+    auto ArgumentUses = collectUses(Argument);
+    Argument.setType(NewType);
+    Adapt(Argument, ArgumentUses);
+  }
+
+  // The initializer has to produce the variable's type. An assignment to the
+  // variable already produces it, having been converted just above.
+  clift::YieldOp Yield = clift::getYieldOp(Initializer);
+  mlir::Value Value = Yield.getValue();
+  if (Value.getType() == NewType)
+    return;
+
+  // A constant is written at the variable's type rather than converted to it,
+  // so that it reads as the value the variable starts out holding.
+  auto Immediate = Value.getDefiningOp<clift::ImmediateOp>();
+  if (Immediate and Immediate->hasOneUse()
+      and mlir::isa<clift::IntegerType>(clift::unwrapTypedefs(NewType))) {
+    Immediate.getResult().setType(NewType);
+    return;
+  }
+
+  Builder.setInsertionPoint(Yield);
+  auto Cast = Builder.create<clift::BitCastOp>(Yield.getLoc(), NewType, Value);
+  markImplicitBetweenIntegers(Cast, OldType, NewType);
+
+  Yield->setOperand(0, Cast);
+}
+
+/// Apply to each local variable of \p Function the type the model records for
+/// it, if any.
+///
+/// This has to happen here, rather than where the variable is created, because
+/// a local variable is identified by the addresses of the statements using it:
+/// only once the body is in its final shape do those addresses agree with the
+/// ones the model was written with. \ref Importer::visitLocalVariableOp looks
+/// the name and the comment up by that very same address set.
+void applyLocalVariableTypes(const model::Function &ModelFunction,
+                             clift::FunctionOp Function,
+                             model::Architecture::Values Architecture) {
+  llvm::SmallVector<std::pair<clift::LocalVariableOp, clift::ValueType>> Retype;
+
+  Function.walk([&](clift::LocalVariableOp Op) {
+    if (not pipeline::locationFromString(rr::LocalVariable, Op.getHandle()))
+      return;
+
+    auto Addresses = clift::getUserAddressSet(Op);
+    const model::LocalVariable *Variable = //
+      ModelFunction.findLocalVariable(Addresses);
+    if (Variable == nullptr or Variable->Type().isEmpty())
+      return;
+
+    mlir::Type Imported = clift::importType(Op.getContext(), *Variable->Type());
+    auto NewType = mlir::cast<clift::ValueType>(Imported);
+
+    // The accesses around the variable stay as wide as the machine code made
+    // them, so a narrower type would have them read and write past its end, and
+    // a `const` one would leave the assignments among them with nothing to
+    // assign to. `edit-by-name` and `edit-c-body` turn such a retype down and
+    // say so; one written into the model by hand is passed over here.
+    auto Old = mlir::cast<clift::ObjectType>(Op.getType());
+    if (NewType.getObjectSize() != Old.getObjectSize())
+      return;
+
+    if (not clift::isModifiableType(NewType))
+      return;
+
+    Retype.emplace_back(Op, NewType);
+  });
+
+  if (Retype.empty())
+    return;
+
+  // Only asked for once there is something to rewrite: a model holding types
+  // alone, as the ones written by hand for the type editing tests are, has no
+  // architecture, and asking such a model for its pointer size aborts.
+  uint64_t PointerSize = model::Architecture::getPointerSize(Architecture);
+
+  // Rewriting during the walk above would have it visit what the rewrite added.
+  for (auto [Op, NewType] : Retype)
+    retypeLocalVariable(Op, NewType, PointerSize);
+}
+
+/// Apply the recorded types to the local variables of every function in
+/// \p Module that has a body of its own.
+void applyLocalVariableTypes(const model::Binary &Model,
+                             mlir::ModuleOp Module) {
+  Module->walk([&Model](clift::FunctionOp Function) {
+    MetaAddress Entry = getMetaAddress(Function);
+    if (Entry.isInvalid())
+      return;
+
+    auto Iterator = Model.Functions().find(Entry);
+    if (Iterator != Model.Functions().end())
+      applyLocalVariableTypes(*Iterator, Function, Model.Architecture());
+  });
+}
+
 } // namespace
 
 void clift::importDescriptiveInfo(const model::Binary &Model,
                                   mlir::ModuleOp Module) {
   SymbolRenamer Symbols;
+
+  // Before the visit, so that a type brought in by a retype is named by it like
+  // any other. What the retype rewrites keeps the locations it found, so the
+  // addresses the visit identifies each variable by are the same either way.
+  applyLocalVariableTypes(Model, Module);
 
   auto R = Importer::visit(Module, Model, Symbols);
   revng_assert(R.succeeded());
@@ -751,6 +1032,11 @@ void clift::importDescriptiveInfo(const model::Function &Function,
   revng_check(CliftFunction != nullptr, "Requested Clift function not found");
 
   SymbolRenamer Symbols;
+
+  // Before the visit, so that a type brought in by a retype is named by it like
+  // any other. What the retype rewrites keeps the locations it found, so the
+  // addresses the visit identifies each variable by are the same either way.
+  applyLocalVariableTypes(Function, CliftFunction, Model.Architecture());
 
   auto R = Importer::visit(CliftFunction, Model, Symbols);
   revng_assert(R.succeeded());

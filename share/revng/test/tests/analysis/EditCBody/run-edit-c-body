@@ -119,7 +119,7 @@ revng -C "$PROJECT" project artifact emit-c "$FUNCTION" | revng ptml > "$PROJECT
 # Insert one directive of each kind before its anchor line.
 insert_directives "$PROJECT/live.c" "$PROJECT/edited.c" \
   "var_0" "RENAME: renamed_local" \
-  "var_0" "RETYPE: uint32_t" \
+  "var_0" "RETYPE: uint64_t" \
   "var_0" "$DECL_COMMENT" \
   "label_0:" "RENAME: renamed_goto_label" \
   "label_0:" "$LABEL_COMMENT" \
@@ -132,8 +132,8 @@ make_configuration "$FUNCTION" "$PROJECT/edited.c" "$PROJECT/edit.yml"
 analyze "$PROJECT/edit.yml" "$PROJECT/analyze.log"
 
 # The comment, both renames and the retype must reach the model. A rename-only
-# variable has no `Type`, so `renamed_local` carrying a 4-byte type (uint32_t)
-# proves the retype landed.
+# variable has no `Type` at all, so `renamed_local` carrying one proves the
+# retype landed.
 assert_model "$FUNCTION" \
   '[.Comments[] | select(.Body == "A plain comment on a statement.")] | length' 1 \
   "the statement comment did not reach the model"
@@ -141,7 +141,8 @@ assert_model "$FUNCTION" \
   '[.LocalVariables[] | select(.Name == "renamed_local")] | length' 1 \
   "the local variable rename did not reach the model"
 assert_model "$FUNCTION" \
-  '.LocalVariables[] | select(.Name == "renamed_local") | .Type.Size' 4 \
+  '.LocalVariables[] | select(.Name == "renamed_local") | .Type.PrimitiveKind' \
+  '"Unsigned"' \
   "the local variable retype did not reach the model"
 assert_model "$FUNCTION" \
   '[.GotoLabels[] | select(.Name == "renamed_goto_label")] | length' 1 \
@@ -182,9 +183,10 @@ assert_model "$FUNCTION" \
   "[.LocalVariables[] | select(.Name == \"$DROPPED_RENAME\")] | length" 0 \
   "a directive that cannot be applied reached the model"
 
-# The renames and the comment round-trip back into the re-emitted code (a type
-# change is model-only and does not reach emit-c, so it is not checked here).
+# The renames, the retype and the comment round-trip back into the re-emitted
+# code. The retype is checked on the declaration, which is where the type a
+# variable was given is written.
 REEMIT="$(revng -C "$PROJECT" project artifact emit-c "$FUNCTION" | revng ptml)"
 assert_reemitted "A plain comment on a statement."
-assert_reemitted "renamed_local"
+assert_reemitted "uint64_t renamed_local"
 assert_reemitted "renamed_goto_label:"

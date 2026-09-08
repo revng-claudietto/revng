@@ -4,6 +4,8 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include <optional>
+
 #include "llvm/ADT/SmallPtrSet.h"
 
 #include "revng/ADT/SortedVector.h"
@@ -13,6 +15,92 @@
 #include "revng/Support/MetaAddress.h"
 
 namespace clift {
+
+/// The address \p V reaches into, when it reaches into a segment at an offset
+/// known here. A bare reference to a segment is an offset of zero.
+///
+/// The chain an access is made of is walked backwards, from the outermost
+/// expression down to the `clift.use` of the segment, accumulating the offset
+/// on the way. Anything else, in particular an index that is not a constant,
+/// makes the address unknown.
+inline std::optional<MetaAddress> getSegmentAddress(mlir::Value V) {
+  mlir::Operation *Op = V.getDefiningOp();
+  if (Op == nullptr)
+    return std::nullopt;
+
+  if (auto Use = mlir::dyn_cast<UseOp>(Op)) {
+    auto Module = Op->getParentOfType<mlir::ModuleOp>();
+    if (not Module)
+      return std::nullopt;
+
+    auto *Symbol = mlir::SymbolTable::lookupSymbolIn(Module,
+                                                     Use.getSymbolNameAttr());
+    auto Global = mlir::dyn_cast_or_null<GlobalVariableOp>(Symbol);
+    if (not Global)
+      return std::nullopt;
+
+    // Only a segment has an address; any other global variable does not.
+    auto Location = pipeline::locationFromString(revng::ranks::Segment,
+                                                 Global.getHandle());
+    if (not Location)
+      return std::nullopt;
+
+    return std::get<0>(Location->at(revng::ranks::Segment));
+  }
+
+  if (auto Addressof = mlir::dyn_cast<AddressofOp>(Op))
+    return getSegmentAddress(Addressof.getObject());
+
+  if (auto Indirection = mlir::dyn_cast<IndirectionOp>(Op))
+    return getSegmentAddress(Indirection.getPointer());
+
+  // Both `a.b` and `a->b` reach the field at the same offset from whatever
+  // their operand designates, so the two are handled through the interface
+  // they share.
+  if (auto Access = mlir::dyn_cast<AccessOpInterface>(Op)) {
+    std::optional<MetaAddress> Base = getSegmentAddress(Access.getValue());
+    if (not Base)
+      return std::nullopt;
+
+    return *Base + Access.getFieldAttr().getOffset();
+  }
+
+  if (auto Cast = mlir::dyn_cast<CastOpInterface>(Op))
+    return getSegmentAddress(Cast.getValue());
+
+  if (auto Add = mlir::dyn_cast<PtrAddOp>(Op)) {
+    // `ptr_add` is commutative, so either operand can be the pointer.
+    mlir::Value Pointer = Add.getLhs();
+    mlir::Value Index = Add.getRhs();
+    auto PointerType = unwrapped_dyn_cast<clift::PointerType>(Pointer
+                                                                .getType());
+    if (not PointerType) {
+      std::swap(Pointer, Index);
+      PointerType = unwrapped_dyn_cast<clift::PointerType>(Pointer.getType());
+    }
+    if (not PointerType)
+      return std::nullopt;
+
+    auto Immediate = Index.getDefiningOp<ImmediateOp>();
+    if (not Immediate)
+      return std::nullopt;
+
+    // An index that does not fit a 64-bit address cannot land in a segment.
+    const llvm::APInt &Value = Immediate.getValue();
+    if (Value.getActiveBits() > 64)
+      return std::nullopt;
+
+    std::optional<MetaAddress> Base = getSegmentAddress(Pointer);
+    if (not Base)
+      return std::nullopt;
+
+    // As in C, the index counts pointees, not bytes.
+    auto Pointee = mlir::cast<ObjectType>(PointerType.getPointeeType());
+    return *Base + Value.getZExtValue() * Pointee.getObjectSize();
+  }
+
+  return std::nullopt;
+}
 
 /// The address of the instruction an operation was lifted from, or an invalid
 /// address if it carries none.

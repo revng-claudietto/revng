@@ -145,6 +145,17 @@ void Outliner::integrateFunctionCallee(CallHandler *TheCallHandler,
 
   BasicBlock *BB = FunctionCall != nullptr ? FunctionCall->getParent() :
                                              JumpToSymbol->getParent();
+  if (IsTailCall) {
+    // Summarize tail calls together with the other jumps to anypc. This
+    // keeps their destination and avoids emitting two call summaries.
+    if (Callee.isValid()) {
+      revng::IRBuilder Builder(BB->getTerminator());
+      Builder.CreateCall(DirectTailCallMarker.get(), { Callee.toValue(&M) });
+    }
+    if (FunctionCall != nullptr)
+      eraseFromParent(FunctionCall);
+    return;
+  }
   MetaAddress CallerBlockAddress = getBasicBlockAddress(getJumpTargetBlock(BB));
   revng_assert(CallerBlockAddress.isValid());
 
@@ -260,9 +271,52 @@ void Outliner::integrateFunctionCallee(CallHandler *TheCallHandler,
     eraseFromParent(JumpToSymbol);
 }
 
+LocalBranchSet
+collectLocalBranches(const MetaAddress &Entry,
+                     const SortedVector<efa::BasicBlock> &Blocks) {
+  LocalBranchSet Result;
+  for (const efa::BasicBlock &Block : Blocks) {
+    MetaAddress Owner = Block.InlinedFrom().isValid() ? Block.InlinedFrom() :
+                                                        Entry;
+    for (const auto &Edge : Block.Successors()) {
+      if (Edge->Type() == FunctionEdgeType::DirectBranch)
+        Result.emplace(Owner, Block.End(), Edge->Destination().start());
+    }
+  }
+
+  return Result;
+}
+
+bool Outliner::isTailCallCandidate(const MetaAddress &Function,
+                                   const LocalBranchSet &LocalBranches,
+                                   llvm::BasicBlock *Source,
+                                   llvm::BasicBlock *Target) const {
+  using namespace llvm;
+
+  if (not isJumpTarget(Target))
+    return false;
+
+  // Only the taken edge of a direct branch can be a tail call: falling through
+  // into the next function is not
+  auto *Branch = dyn_cast<BranchInst>(Source->getTerminator());
+  if (Branch == nullptr)
+    return false;
+
+  MetaAddress Next = getNextPC(Branch);
+  MetaAddress Destination = getBasicBlockAddress(Target);
+  if (Next.isInvalid() or Destination == Next)
+    return false;
+
+  if (not Binary.Functions().contains(Destination))
+    return false;
+
+  return not LocalBranches.contains({ Function, Next, Destination });
+}
+
 OutlinedFunction
 Outliner::outlineFunctionInternal(CallHandler *TheCallHandler,
                                   const MetaAddress &FunctionAddress,
+                                  const LocalBranchSet &LocalBranches,
                                   OutlinedFunctionsMap &FunctionsToInline) {
   using namespace llvm;
   using llvm::BasicBlock;
@@ -313,7 +367,11 @@ Outliner::outlineFunctionInternal(CallHandler *TheCallHandler,
       }
     } else {
       for (auto *Successor : successors(Current)) {
-        if (not isPartOfRootDispatcher(Successor))
+        if (not isPartOfRootDispatcher(Successor)
+            and not isTailCallCandidate(FunctionAddress,
+                                        LocalBranches,
+                                        Current,
+                                        Successor))
           Queue.insert(Successor);
       }
     }
@@ -343,6 +401,7 @@ Outliner::outlineFunctionInternal(CallHandler *TheCallHandler,
   //
   // Switch successor of function calls from callee to fallthrough
   //
+  SmallVector<BasicBlock *, 8> TailCallBlocks;
   std::map<llvm::CallInst *, MetaAddress> CallToCallee;
   for (const auto &BB : BlocksToExtract) {
     if (CallInst *FunctionCall = getMarker(BB, FunctionCallMarker)) {
@@ -364,7 +423,7 @@ Outliner::outlineFunctionInternal(CallHandler *TheCallHandler,
 
       using namespace model::FunctionAttribute;
       bool IsNoReturn = CalleeSummary->Attributes.contains(NoReturn);
-      if (IsNoReturn) {
+      if (IsNoReturn and not IsTailCall) {
         auto *BB = Term->getParent();
         Term->eraseFromParent();
 
@@ -399,8 +458,31 @@ Outliner::outlineFunctionInternal(CallHandler *TheCallHandler,
         }
         ++ArgNo;
       }
+    } else {
+      // Split the edge to a function entry, preserving its destination until
+      // after function inlining
+      auto *Term = BB->getTerminator();
+      for (unsigned I = 0; I < Term->getNumSuccessors(); ++I) {
+        BasicBlock *Successor = Term->getSuccessor(I);
+        if (not isTailCallCandidate(FunctionAddress,
+                                    LocalBranches,
+                                    BB,
+                                    Successor))
+          continue;
+
+        auto *TailCall = BasicBlock::Create(M.getContext(),
+                                            "direct_tail_call",
+                                            Root);
+        revng::IRBuilder Builder(TailCall);
+        Builder.CreateCall(DirectTailCallMarker.get(),
+                           { getBasicBlockAddress(Successor).toValue(&M) });
+        Builder.CreateBr(OutlinedFunction.AnyPCCloned);
+        Term->setSuccessor(I, TailCall);
+        TailCallBlocks.push_back(TailCall);
+      }
     }
   }
+  append_range(BlocksToExtract, TailCallBlocks);
 
   if (not HasEntryBlock) {
     auto *EntryBlock = BasicBlock::Create(Root->getContext(), "", Root);
@@ -429,8 +511,7 @@ Outliner::outlineFunctionInternal(CallHandler *TheCallHandler,
     if (FunctionCall != nullptr)
       Callee = CallToCallee.at(FunctionCall);
     CallInst *JumpToSymbol = getMarker(&BB, JumpToSymbolMarker);
-    // TODO: we don't integrate the call if it's a tail call (JumpToSymbol but
-    //       no FunctionCall). Is this OK?
+    // Jumps without a function_call marker are handled by createAnyPCHooks.
     if (FunctionCall != nullptr) {
       integrateFunctionCallee(TheCallHandler,
                               FunctionAddress,
@@ -482,21 +563,31 @@ void Outliner::createAnyPCHooks(CallHandler *TheCallHandler,
     Value *SymbolName = CPN::get(Type::getInt8PtrTy(Context));
     CallInst *JumpToSymbol = getMarker(BB, JumpToSymbolMarker);
 
+    MetaAddress Callee = MetaAddress::invalid();
+    for (auto &I : *BB) {
+      if (auto *Call = getCallTo(&I, DirectTailCallMarker.get())) {
+        Callee = MetaAddress::fromValue(Call->getArgOperand(0));
+        Call->eraseFromParent();
+        break;
+      }
+    }
+
     auto &&[Summary, _] = getCallSiteInfo(OutlinedFunction->Address,
                                           BB,
                                           nullptr,
                                           JumpToSymbol,
-                                          MetaAddress::invalid());
+                                          Callee);
 
     if (JumpToSymbol != nullptr) {
       SymbolName = JumpToSymbol->getArgOperand(0);
       eraseFromParent(JumpToSymbol);
     }
 
-    TheCallHandler->handleIndirectJump(Builder,
-                                       IndirectRetBBAddress,
-                                       Summary->ClobberedRegisters,
-                                       SymbolName);
+    TheCallHandler->handleJump(Builder,
+                               IndirectRetBBAddress,
+                               Callee,
+                               Summary->ClobberedRegisters,
+                               SymbolName);
   }
 }
 
@@ -544,7 +635,8 @@ private:
 };
 
 OutlinedFunction Outliner::outline(const MetaAddress &Entry,
-                                   CallHandler *Handler) {
+                                   CallHandler *Handler,
+                                   const LocalBranchSet &LocalBranches) {
   using namespace llvm;
 
   OutlinedFunction Result;
@@ -559,7 +651,10 @@ OutlinedFunction Outliner::outline(const MetaAddress &Entry,
     FunctionsToInline.clear();
 
     // Outline functions but do not perform inlining
-    Result = outlineFunctionInternal(Handler, Entry, FunctionsToInline);
+    Result = outlineFunctionInternal(Handler,
+                                     Entry,
+                                     LocalBranches,
+                                     FunctionsToInline);
 
     //
     // Fixed point creation of function that needs to be inlined
@@ -571,6 +666,7 @@ OutlinedFunction Outliner::outline(const MetaAddress &Entry,
         if (F->isDeclaration()) {
           Function *ToInline = createFunctionToInline(Handler,
                                                       Address,
+                                                      LocalBranches,
                                                       FunctionsToInline);
           F->replaceAllUsesWith(ToInline);
           FunctionsToInline.set(Address, ToInline);
@@ -629,6 +725,7 @@ OutlinedFunction Outliner::outline(const MetaAddress &Entry,
 llvm::Function *
 Outliner::createFunctionToInline(CallHandler *TheCallHandler,
                                  const MetaAddress &Entry,
+                                 const LocalBranchSet &LocalBranches,
                                  OutlinedFunctionsMap &FunctionsToInline) {
   using namespace llvm;
   LLVMContext &Context = M.getContext();
@@ -636,6 +733,7 @@ Outliner::createFunctionToInline(CallHandler *TheCallHandler,
   // Recreate outlined function
   OutlinedFunction OF = outlineFunctionInternal(TheCallHandler,
                                                 Entry,
+                                                LocalBranches,
                                                 FunctionsToInline);
 
   // Adjust `anypc` and `unexpectedpc` BBs of the function to inline

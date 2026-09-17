@@ -58,10 +58,11 @@ public:
   void handlePostNoReturn(revng::IRBuilder &Builder,
                           const llvm::DebugLoc &DbgLocation) final;
 
-  void handleIndirectJump(revng::IRBuilder &Builder,
-                          MetaAddress Block,
-                          const CSVSet &ClobberedRegisters,
-                          llvm::Value *SymbolNamePointer) final;
+  void handleJump(revng::IRBuilder &Builder,
+                  MetaAddress Block,
+                  MetaAddress Callee,
+                  const CSVSet &ClobberedRegisters,
+                  llvm::Value *SymbolNamePointer) final;
 };
 
 /// This class, given an Oracle, analyzes a function returning its CFG, the set
@@ -107,7 +108,18 @@ public:
 public:
   FunctionSummary analyze(const MetaAddress &Entry);
 
+  /// Outline the function at \p Entry following the control-flow graph the
+  /// oracle holds for it
   OutlinedFunction outline(const MetaAddress &Entry);
+
+private:
+  /// Analyze \p Entry once, recording in \p LocalBranches the candidate tail
+  /// calls that turned out not to be
+  FunctionSummary analyze(const MetaAddress &Entry,
+                          LocalBranchSet &LocalBranches);
+
+  OutlinedFunction outline(const MetaAddress &Entry,
+                           const LocalBranchSet &LocalBranches);
 
 private:
   static llvm::FunctionType *createCallMarkerType(llvm::Module &M);
@@ -128,7 +140,8 @@ private:
   void runOptimizationPipeline(llvm::Function *F);
 
   FunctionSummary milkInfo(OutlinedFunction *F,
-                           SortedVector<efa::BasicBlock> &&CFG);
+                           SortedVector<efa::BasicBlock> &&CFG,
+                           LocalBranchSet &LocalBranches);
 
   struct State {
     llvm::Value *StackPointer;

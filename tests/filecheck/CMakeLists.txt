@@ -448,6 +448,8 @@ set(FILECHECK_TESTS
     clift/types/union-with-pointer-recursion.mlir
     clift/unique-fallthrough-branch-hoisting/hoist-else.mlir
     clift/unique-fallthrough-branch-hoisting/hoist-then.mlir
+    early-function-analysis/tail-calls-arm.s
+    early-function-analysis/tail-calls-x86-64.s
     llvm-passes/arithmetic-to-gep.ll
     llvm-passes/dagify.ll
     llvm-passes/detect-uninlinable-helpers.ll

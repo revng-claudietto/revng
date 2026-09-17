@@ -126,7 +126,10 @@ definitions:
           Name of the dynamic function being called, or empty if not a dynamic call
         type: string
       - name: IsTailCall
-        doc: Is this a tail call?
+        doc: |
+          Whether this call transfers control to the callee without returning
+          to this function. Tail calls have no fallthrough, including when
+          Destination identifies a local function.
         type: bool
         default: false
       - name: Attributes

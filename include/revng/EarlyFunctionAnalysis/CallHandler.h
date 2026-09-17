@@ -35,10 +35,13 @@ public:
                                   const llvm::DebugLoc &DbgLocation) = 0;
 
   /// \note Implementers should not emit a terminator
-  virtual void handleIndirectJump(revng::IRBuilder &Builder,
-                                  MetaAddress Block,
-                                  const CSVSet &ClobberedRegisters,
-                                  llvm::Value *SymbolNamePointer) = 0;
+  /// Handle an indirect jump or a candidate tail call to a local function.
+  /// Callee is invalid for indirect jumps.
+  virtual void handleJump(revng::IRBuilder &Builder,
+                          MetaAddress Block,
+                          MetaAddress Callee,
+                          const CSVSet &ClobberedRegisters,
+                          llvm::Value *SymbolNamePointer) = 0;
 };
 
 } // namespace efa

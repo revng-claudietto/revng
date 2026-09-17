@@ -54,6 +54,8 @@ using BranchArgument = efa::IndirectBranchInfoArgument;
 constexpr unsigned CallerBlockIDIndex = index(BranchArgument::CallerBlockID);
 constexpr unsigned CalledSymbolIndex = index(BranchArgument::CalledSymbol);
 constexpr unsigned
+  CalledLocalFunctionIndex = index(BranchArgument::CalledLocalFunction);
+constexpr unsigned
   JumpsToReturnAddressIndex = index(BranchArgument::JumpsToReturnAddress);
 constexpr unsigned
   StackPointerOffsetIndex = index(BranchArgument::StackPointerOffset);
@@ -115,6 +117,16 @@ blockFromIndirectBranchInfo(CallBase *CI, SortedVector<efa::BasicBlock> &CFG) {
   return CFG.at(BasicBlockID::fromValue(BlockIDArgument));
 }
 
+static UpcastablePointer<efa::FunctionEdgeBase> makeTailCall(CallBase *CI) {
+  auto *CalleeArgument = CI->getArgOperand(CalledLocalFunctionIndex);
+  auto Edge = makeCall(MetaAddress::fromValue(CalleeArgument));
+  auto *Call = cast<efa::CallEdge>(Edge.get());
+  Call->IsTailCall() = true;
+  auto *SymbolArgument = CI->getArgOperand(CalledSymbolIndex);
+  Call->DynamicFunction() = extractFromConstantStringPtr(SymbolArgument);
+  return Edge;
+}
+
 static std::unique_ptr<llvm::raw_ostream>
 streamFromOption(const opt<std::string> &Option) {
   if (Option.getNumOccurrences() == 1) {
@@ -148,7 +160,7 @@ CFGAnalyzer::CFGAnalyzer(llvm::Module &M,
   PreCallHook(createCallMarkerType(M), "precall_hook", &M),
   PostCallHook(PreCallHook.get()->getFunctionType(), "postcall_hook", &M),
   RetHook(createRetMarkerType(M), "retcall_hook", &M),
-  Outliner(M, Root, Globals, Oracle),
+  Outliner(M, Root, Globals, *Binary, Oracle),
   OpaqueBranchConditionsPool(&M, false),
   OutputAAWriter(streamFromOption(AAWriterPath)),
   OutputIBI(streamFromOption(IndirectBranchInfoSummaryPath)) {
@@ -166,6 +178,12 @@ CFGAnalyzer::CFGAnalyzer(llvm::Module &M,
 }
 
 OutlinedFunction CFGAnalyzer::outline(const MetaAddress &Entry) {
+  const auto &CFG = Oracle.getLocalFunction(Entry).CFG;
+  return outline(Entry, collectLocalBranches(Entry, CFG));
+}
+
+OutlinedFunction CFGAnalyzer::outline(const MetaAddress &Entry,
+                                      const LocalBranchSet &LocalBranches) {
   auto &CFG = Oracle.getLocalFunction(Entry).CFG;
   bool HasCFG = CFG.size() != 0;
   llvm::SmallSet<MetaAddress, 4> ReturnBlocks;
@@ -183,7 +201,7 @@ OutlinedFunction CFGAnalyzer::outline(const MetaAddress &Entry) {
                             Globals.spReg(),
                             HasCFG ? &ReturnBlocks : nullptr);
 
-  OutlinedFunction Result = Outliner.outline(Entry, &Summarizer);
+  OutlinedFunction Result = Outliner.outline(Entry, &Summarizer, LocalBranches);
 
   // Make sure we start a new block before a PreCallHook
   auto IsFirst = [](llvm::Instruction *I) {
@@ -249,8 +267,8 @@ CFGAnalyzer::handleCall(llvm::CallInst *PreCallHookCall) {
   // Tail call?
   bool IsTailCall = (getLimitedValue(PreCallHookCall->getArgOperand(3)) == 1);
 
-  // Here we handle only direct, non-tail calls
-  if (not IsDirectCall and IsTailCall)
+  // Tail calls are classified after checking the state recorded by the IBI.
+  if (IsTailCall)
     return std::nullopt;
 
   if (IsDynamicCall)
@@ -338,9 +356,6 @@ CFGAnalyzer::collectDirectCFG(OutlinedFunction *OF) {
               Block.Successors().insert(*MaybeEdge);
             }
           } else if (isJumpTarget(Succ)) {
-            // TODO: handle situation in which it's a *direct* tail call.
-            //       We might need an IBI here to know if the stack position is
-            //       compatible with a tail call.
             BasicBlockID Destination = getBasicBlockID(Succ);
             revng_log(Log,
                       "It's a jump target: emitting a DirectBranch to "
@@ -454,6 +469,7 @@ void CFGAnalyzer::createIBIMarker(OutlinedFunction *Outlined) {
   ArgTypes.resize(FirstPreservedRegisterIndex);
   ArgTypes[CallerBlockIDIndex] = I8Ptr;
   ArgTypes[CalledSymbolIndex] = I8Ptr;
+  ArgTypes[CalledLocalFunctionIndex] = I8Ptr;
   ArgTypes[JumpsToReturnAddressIndex] = Initial.ReturnPC->getType();
   ArgTypes[StackPointerOffsetIndex] = Initial.StackPointer->getType();
   ArgTypes[ReturnValuePreservedIndex] = Initial.ReturnPC->getType();
@@ -509,16 +525,26 @@ void CFGAnalyzer::createIBIMarker(OutlinedFunction *Outlined) {
     // Record the name of the symbol, if any
     using CPN = ConstantPointerNull;
     Value *SymbolName = CPN::get(Type::getInt8PtrTy(Context));
+    Value *Callee = MetaAddress::invalid().toValue(&M);
     BasicBlock *BB = Term->getParent();
 
     for (Instruction *I : previousInstructions(BB)) {
       if (auto *Call = getCallTo(I, PreCallHook.get())) {
         SymbolName = Call->getArgOperand(2);
+        Callee = Call->getArgOperand(1);
+        // Compatibility concerns the state before the callee executes. In
+        // particular, its summary may clobber the link register. Keep the
+        // register differences below computed after the call summary.
+        revng::IRBuilder BeforeCall(Call);
+        State CallState = loadState(BeforeCall);
+        Final.StackPointer = CallState.StackPointer;
+        Final.ReturnPC = CallState.ReturnPC;
         break;
       }
     }
 
     ArgValues[CalledSymbolIndex] = SymbolName;
+    ArgValues[CalledLocalFunctionIndex] = Callee;
 
     // Compute the difference between the final PC at this program point and
     // the expected return address
@@ -741,7 +767,8 @@ static bool isNoReturn(const model::Binary &Binary,
 }
 
 FunctionSummary CFGAnalyzer::milkInfo(OutlinedFunction *OutlinedFunction,
-                                      SortedVector<efa::BasicBlock> &&CFG) {
+                                      SortedVector<efa::BasicBlock> &&CFG,
+                                      LocalBranchSet &LocalBranches) {
   using namespace llvm;
   using namespace efa::FunctionEdgeType;
   using namespace model::Architecture;
@@ -767,7 +794,7 @@ FunctionSummary CFGAnalyzer::milkInfo(OutlinedFunction *OutlinedFunction,
     TailCalls;
   SmallVector<std::pair<CallBase *, int64_t>, 4> MaybeReturns;
   SmallVector<std::tuple<CallBase *, int64_t, const FunctionSummary *>, 4>
-    MaybeIndirectTailCalls;
+    MaybeTailCalls;
 
   for (CallBase *CI :
        callers(OutlinedFunction->IndirectBranchInfoMarker.get())) {
@@ -791,9 +818,11 @@ FunctionSummary CFGAnalyzer::milkInfo(OutlinedFunction *OutlinedFunction,
     // it's useful to determine the FSO of the caller
     auto *CalledSymbolArgument = CI->getArgOperand(CalledSymbolIndex);
     StringRef CalledSymbol = extractFromConstantStringPtr(CalledSymbolArgument);
+    auto *CalleeArgument = CI->getArgOperand(CalledLocalFunctionIndex);
+    MetaAddress Callee = MetaAddress::fromValue(CalleeArgument);
     auto &&[Summary, IsTailCall] = Oracle.getCallSite(OutlinedFunction->Address,
                                                       Block.ID(),
-                                                      MetaAddress::invalid(),
+                                                      Callee,
                                                       CalledSymbol);
 
     Argument = CI->getArgOperand(StackPointerOffsetIndex);
@@ -812,28 +841,26 @@ FunctionSummary CFGAnalyzer::milkInfo(OutlinedFunction *OutlinedFunction,
           // of a function to inline. Record it as BrokenReturn.
           IBIResult.emplace_back(CI, makeIndirectEdge(BrokenReturn));
         }
-      } else if (IsTailCall) {
-        if (Summary->ElectedFSO.has_value()) {
-          // We have a tail call for which the FSO is known! We can exploit this
-          // to know this function's FSO!
-          TailCalls.emplace_back(CI, FSO + *Summary->ElectedFSO, Summary);
-        }
       } else {
         Argument = CI->getArgOperand(ReturnValuePreservedIndex);
         auto *ReturnValuePreserved = dyn_cast<ConstantInt>(Argument);
-        if (ReturnValuePreserved != nullptr
-            and getLimitedValue(ReturnValuePreserved) == 0
-            and Summary->ElectedFSO.has_value()) {
-          // Here the stack pointer offset is known and the value of the
-          // return address (in the link register/top of the stack) has been
-          // preserved.
-          // This is definitely not a return but it might be an indirect
-          // tail call.
-          MaybeIndirectTailCalls.emplace_back(CI,
-                                              FSO + *Summary->ElectedFSO,
-                                              Summary);
+        bool PreservesReturnAddress = ReturnValuePreserved != nullptr
+                                      and ReturnValuePreserved->isZero();
+        bool IsNoReturn = Summary->Attributes
+                            .contains(model::FunctionAttribute::NoReturn);
+        if ((IsTailCall or PreservesReturnAddress) and IsNoReturn
+            and FSO == 0) {
+          // A non-returning callee has no final stack offset to vote with.
+          // Its entry must still see a restored stack and return address.
+          IBIResult.emplace_back(CI, makeTailCall(CI));
+        } else if ((IsTailCall or PreservesReturnAddress)
+                   and Summary->ElectedFSO.has_value()
+                   and FSO + *Summary->ElectedFSO >= CallPushSize) {
+          // Include the callee's stack adjustment, just as for an indirect
+          // tail call. A candidate must agree with the caller's other exits.
+          auto &Candidates = IsTailCall ? TailCalls : MaybeTailCalls;
+          Candidates.emplace_back(CI, FSO + *Summary->ElectedFSO, Summary);
         } else {
-          // The return address is not preserved, something fishy is going on
           IBIResult.emplace_back(CI, makeIndirectEdge(LongJmp));
         }
       }
@@ -856,8 +883,8 @@ FunctionSummary CFGAnalyzer::milkInfo(OutlinedFunction *OutlinedFunction,
     }
     Log << DoLog;
 
-    Log << "MaybeIndirectTailCalls:\n";
-    for (const auto &[Call, FSO, Summary] : MaybeIndirectTailCalls) {
+    Log << "MaybeTailCalls:\n";
+    for (const auto &[Call, FSO, Summary] : MaybeTailCalls) {
       Log << "  " << ::getName(Call) << " (FSO: " << FSO << ")\n";
     }
     Log << DoLog;
@@ -881,17 +908,14 @@ FunctionSummary CFGAnalyzer::milkInfo(OutlinedFunction *OutlinedFunction,
     bool Different = false;
     for (auto &&[CI, FSO, Summary] : TailCalls) {
       if (FSO == *MaybeWinFSO) {
+        IBIResult.emplace_back(CI, makeTailCall(CI));
         ClobberedRegisters.recordClobberedRegisters(CI);
         ClobberedRegisters.add(Summary->ClobberedRegisters);
       } else {
         // We found a tail call that leads to a FSO that's not coherent with
         // the elected one. Purge it turning it into a LongJmp.
         Different = true;
-        efa::BasicBlock &Block = blockFromIndirectBranchInfo(CI, CFG);
-        revng_assert(Block.Successors().size() == 1);
-        auto OldEdge = cast<efa::CallEdge>(Block.Successors().begin()->get());
-        revng_assert(OldEdge->IsTailCall());
-        Block.Successors() = { makeIndirectEdge(LongJmp) };
+        IBIResult.emplace_back(CI, makeIndirectEdge(LongJmp));
       }
     }
 
@@ -928,23 +952,18 @@ FunctionSummary CFGAnalyzer::milkInfo(OutlinedFunction *OutlinedFunction,
   }
 
   //
-  // Process MaybeIndirectTailCalls
+  // Process MaybeTailCalls
   //
 
-  // If no FSO was elected, retry focusing  on MaybeIndirectTailCalls
+  // If no FSO was elected, retry focusing  on MaybeTailCalls
   if (not MaybeWinFSO.has_value()) {
     revng_assert(MaybeReturns.size() == 0);
-    MaybeWinFSO = electFSO(MaybeIndirectTailCalls);
+    MaybeWinFSO = electFSO(MaybeTailCalls);
   }
 
-  for (const auto &[CI, FSO, Summary] : MaybeIndirectTailCalls) {
+  for (const auto &[CI, FSO, Summary] : MaybeTailCalls) {
     if (MaybeWinFSO.has_value() && FSO == *MaybeWinFSO) {
-      auto NewEdge = makeCall(MetaAddress::invalid());
-      auto *Call = cast<efa::CallEdge>(NewEdge.get());
-      Call->IsTailCall() = true;
-      auto *Argument = CI->getArgOperand(CalledSymbolIndex);
-      Call->DynamicFunction() = extractFromConstantStringPtr(Argument);
-      IBIResult.emplace_back(CI, std::move(NewEdge));
+      IBIResult.emplace_back(CI, makeTailCall(CI));
       ClobberedRegisters.recordClobberedRegisters(CI);
       ClobberedRegisters.add(Summary->ClobberedRegisters);
     } else {
@@ -981,6 +1000,14 @@ FunctionSummary CFGAnalyzer::milkInfo(OutlinedFunction *OutlinedFunction,
   //
   for (const auto &[CI, Edge] : IBIResult) {
     efa::BasicBlock &Block = blockFromIndirectBranchInfo(CI, CFG);
+    auto *CalleeArgument = CI->getArgOperand(CalledLocalFunctionIndex);
+    MetaAddress Callee = MetaAddress::fromValue(CalleeArgument);
+    if (Callee.isValid() and Edge->Type() == LongJmp) {
+      MetaAddress Owner = Block.InlinedFrom().isValid() ?
+                            Block.InlinedFrom() :
+                            OutlinedFunction->Address;
+      LocalBranches.emplace(Owner, Block.End(), Callee);
+    }
     Block.Successors().insert(std::move(Edge));
   }
 
@@ -1050,13 +1077,26 @@ FunctionSummary CFGAnalyzer::milkInfo(OutlinedFunction *OutlinedFunction,
 }
 
 FunctionSummary CFGAnalyzer::analyze(const MetaAddress &Entry) {
+  // Probe function-entry branches first, then restore local control flow for
+  // rejected candidates. Each retry admits at least one previously cut edge.
+  LocalBranchSet LocalBranches;
+  while (true) {
+    size_t PreviousSize = LocalBranches.size();
+    FunctionSummary Result = analyze(Entry, LocalBranches);
+    if (LocalBranches.size() == PreviousSize)
+      return Result;
+  }
+}
+
+FunctionSummary CFGAnalyzer::analyze(const MetaAddress &Entry,
+                                     LocalBranchSet &LocalBranches) {
   using namespace llvm;
   using llvm::BasicBlock;
 
   revng::IRBuilder Builder(M.getContext());
 
   // Detect function boundaries
-  OutlinedFunction OutlinedFunction = outline(Entry);
+  OutlinedFunction OutlinedFunction = outline(Entry, LocalBranches);
 
   // Recover the control-flow graph of the function
   SortedVector<efa::BasicBlock> CFG = collectDirectCFG(&OutlinedFunction);
@@ -1110,7 +1150,9 @@ FunctionSummary CFGAnalyzer::analyze(const MetaAddress &Entry) {
   runOptimizationPipeline(F);
 
   // Squeeze out the results obtained from the optimization passes
-  auto FunctionInfo = milkInfo(&OutlinedFunction, std::move(CFG));
+  auto FunctionInfo = milkInfo(&OutlinedFunction,
+                               std::move(CFG),
+                               LocalBranches);
 
   return FunctionInfo;
 }
@@ -1176,14 +1218,15 @@ void CallSummarizer::handlePostNoReturn(revng::IRBuilder &Builder,
   emitAbort(Builder, "", DbgLocation);
 }
 
-void CallSummarizer::handleIndirectJump(revng::IRBuilder &Builder,
-                                        MetaAddress Block,
-                                        const CSVSet &ClobberedRegisters,
-                                        llvm::Value *SymbolNamePointer) {
+void CallSummarizer::handleJump(revng::IRBuilder &Builder,
+                                MetaAddress Block,
+                                MetaAddress Callee,
+                                const CSVSet &ClobberedRegisters,
+                                llvm::Value *SymbolNamePointer) {
   bool EmitCallHook = true;
 
   if (ReturnBlocks != nullptr) {
-    bool IsReturn = ReturnBlocks->count(Block) != 0;
+    bool IsReturn = Callee.isInvalid() and ReturnBlocks->count(Block) != 0;
     EmitCallHook = not IsReturn;
   }
 
@@ -1192,7 +1235,7 @@ void CallSummarizer::handleIndirectJump(revng::IRBuilder &Builder,
   if (EmitCallHook) {
     NewPreCallHook = Builder.CreateCall(PreCallHook,
                                         { Block.toValue(M),
-                                          MetaAddress::invalid().toValue(M),
+                                          Callee.toValue(M),
                                           SymbolNamePointer,
                                           Builder.getTrue() });
 
@@ -1202,7 +1245,7 @@ void CallSummarizer::handleIndirectJump(revng::IRBuilder &Builder,
 
     NewPostCallHook = Builder.CreateCall(PostCallHook,
                                          { Block.toValue(M),
-                                           MetaAddress::invalid().toValue(M),
+                                           Callee.toValue(M),
                                            SymbolNamePointer,
                                            Builder.getTrue() });
   }

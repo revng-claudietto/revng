@@ -97,9 +97,11 @@ bool FunctionSummaryOracle::registerCallSite(MetaAddress Function,
   auto It = CallSites.find(Key);
   if (It != CallSites.end()) {
     auto &Recorded = It->second.first;
-    bool Changed = not New.containedOrEqual(Recorded);
+    bool Changed = not New.containedOrEqual(Recorded)
+                   or It->second.second != IsTailCall;
     New.combine(Recorded);
     Recorded = std::move(New);
+    It->second.second = IsTailCall;
     return Changed;
   } else {
     CallSiteDescriptor CSD = { std::move(New), IsTailCall };

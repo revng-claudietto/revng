@@ -282,6 +282,11 @@ void DetectABI::computeApproximateCallGraph() {
       } else {
 
         for (BasicBlock *Successor : successors(Current)) {
+          if (auto It = BasicBlockNodeMap.find(Successor);
+              It != BasicBlockNodeMap.end()) {
+            if (not llvm::is_contained(StartNode->successors(), It->second))
+              StartNode->addSuccessor(It->second);
+          }
           if (not isPartOfRootDispatcher(Successor)
               && !Visited.contains(Successor)) {
             revng_assert(Successor != nullptr);
@@ -897,14 +902,10 @@ void DetectABI::finalizeModel() {
             // It's an indirect call for which we have now call site information
             auto Prototype = buildPrototypeForIndirectCall(Summary, Block);
 
-            // This analysis does not have the power to detect whether an
-            // indirect call site is a tail call, noreturn or inline
-            bool IsTailCall = false;
-
             // Register new prototype
             Function->CallSites().emplace(BlockAddress,
                                           std::move(Prototype),
-                                          IsTailCall);
+                                          CE->IsTailCall());
           }
         }
       }

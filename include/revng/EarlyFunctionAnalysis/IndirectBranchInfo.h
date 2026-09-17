@@ -15,6 +15,7 @@ namespace efa {
 enum class IndirectBranchInfoArgument {
   CallerBlockID,
   CalledSymbol,
+  CalledLocalFunction,
   JumpsToReturnAddress,
   StackPointerOffset,
   ReturnValuePreserved,

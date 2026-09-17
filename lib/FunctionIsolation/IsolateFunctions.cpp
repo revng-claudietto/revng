@@ -227,13 +227,13 @@ public:
                     DbgLocation);
   }
 
-  void handleIndirectJump(revng::IRBuilder &Builder,
-                          MetaAddress Block,
-                          const efa::CSVSet &ClobberedRegisters,
-                          llvm::Value *SymbolNamePointer) final {
+  void handleJump(revng::IRBuilder &Builder,
+                  MetaAddress Block,
+                  MetaAddress Callee,
+                  const efa::CSVSet &ClobberedRegisters,
+                  llvm::Value *SymbolNamePointer) final {
     revng_assert(SymbolNamePointer != nullptr);
-    if (not isa<ConstantPointerNull>(SymbolNamePointer))
-      handleCall(Builder, MetaAddress::invalid(), SymbolNamePointer);
+    handleCall(Builder, Callee, SymbolNamePointer);
   }
 
 private:
@@ -319,12 +319,15 @@ public:
                    RootFunction &Root,
                    const CSVGlobals &Globals) :
     Oracle(FSOracle::importWithoutPrototypes(M, Globals, Binary)),
-    Outliner(M, Root, Globals, Oracle) {}
+    Outliner(M, Root, Globals, Binary, Oracle) {}
 
 public:
-  efa::OutlinedFunction outline(MetaAddress Entry,
+  efa::OutlinedFunction outline(const efa::ControlFlowGraph &CFG,
                                 efa::CallHandler *TheCallHandler) {
-    return Outliner.outline(Entry, TheCallHandler);
+    return Outliner.outline(CFG.Entry(),
+                            TheCallHandler,
+                            efa::collectLocalBranches(CFG.Entry(),
+                                                      CFG.Blocks()));
   }
 };
 
@@ -393,7 +396,10 @@ void Isolate::handleAnyPCJumps(efa::OutlinedFunction &Outlined,
         case efa::FunctionEdgeType::FunctionCall: {
           auto *Call = cast<efa::CallEdge>(Edge.get());
           revng_assert(Call->IsTailCall());
-          Builder.CreateRetVoid();
+          if (Call->hasAttribute(Binary, model::FunctionAttribute::NoReturn))
+            Builder.CreateUnreachable();
+          else
+            Builder.CreateRetVoid();
         } break;
         case efa::FunctionEdgeType::Invalid:
         case efa::FunctionEdgeType::DirectBranch:
@@ -662,7 +668,7 @@ Function *Isolate::isolateFunction(const efa::ControlFlowGraph &FM) {
   // Outline the function (later on we'll steal its body and move it into F)
   CallIsolatedFunction CallHandler(*this, FM);
   FunctionOutliner Outliner(*ClonedModule, Binary, *RootF, *Globals);
-  efa::OutlinedFunction Outlined = Outliner.outline(Entry, &CallHandler);
+  efa::OutlinedFunction Outlined = Outliner.outline(FM, &CallHandler);
 
   handleUnexpectedPCCloned(Outlined);
 

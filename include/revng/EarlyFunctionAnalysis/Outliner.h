@@ -21,6 +21,17 @@ namespace efa {
 class CallHandler;
 class OutlinedFunctionsMap;
 
+/// Direct branches to a function entry that are not tail calls: owning
+/// function, address following the branch and destination.
+using LocalBranchSet = std::set<
+  std::tuple<MetaAddress, MetaAddress, MetaAddress>>;
+
+/// \return the direct branches of \p Blocks, the control-flow graph of the
+///         function at \p Entry
+LocalBranchSet
+collectLocalBranches(const MetaAddress &Entry,
+                     const SortedVector<efa::BasicBlock> &Blocks);
+
 /// An outlined function helper object.
 struct OutlinedFunction {
 public:
@@ -80,12 +91,16 @@ private:
   llvm::Module &M;
   RootFunction &RootF;
   const CSVGlobals &Globals;
+  const model::Binary &Binary;
   FunctionSummaryOracle &Oracle;
 
   /// UnexpectedPCMarker is used to indicate that `unexpectedpc` basic
   /// block of a function to inline need to be adjusted to jump to
   /// `unexpectedpc` of their caller.
   TemporaryOpaqueFunction UnexpectedPCMarker;
+
+  /// Keeps the destination of a candidate direct tail call through inlining.
+  TemporaryOpaqueFunction DirectTailCallMarker;
 
   OpaqueFunctionsPool<llvm::Type *> OpaqueReturnAddress;
 
@@ -95,12 +110,15 @@ public:
   Outliner(llvm::Module &M,
            RootFunction &RootF,
            const CSVGlobals &Globals,
+           const model::Binary &Binary,
            FunctionSummaryOracle &Oracle) :
     M(M),
     RootF(RootF),
     Globals(Globals),
+    Binary(Binary),
     Oracle(Oracle),
     UnexpectedPCMarker(initializeUnexpectedPCMarker(M)),
+    DirectTailCallMarker(initializeDirectTailCallMarker(M)),
     OpaqueReturnAddress(&M, false),
     CEAC(*M.getFunction("root")) {
 
@@ -117,9 +135,20 @@ public:
 
 public:
   OutlinedFunction outline(const MetaAddress &EntryAddress,
-                           CallHandler *TheCallHandler);
+                           CallHandler *TheCallHandler,
+                           const LocalBranchSet &LocalBranches);
 
 private:
+  static TemporaryOpaqueFunction
+  initializeDirectTailCallMarker(llvm::Module &M) {
+    auto &Context = M.getContext();
+    auto *Void = llvm::Type::getVoidTy(Context);
+    auto *Pointer = llvm::Type::getInt8PtrTy(Context);
+    return { llvm::FunctionType::get(Void, { Pointer }, false),
+             "direct_tail_call",
+             &M };
+  }
+
   static TemporaryOpaqueFunction initializeUnexpectedPCMarker(llvm::Module &M) {
     return { llvm::FunctionType::get(llvm::Type::getVoidTy(M.getContext()),
                                      false),
@@ -131,7 +160,16 @@ private:
   OutlinedFunction
   outlineFunctionInternal(CallHandler *TheCallHandler,
                           const MetaAddress &EntryAddress,
+                          const LocalBranchSet &LocalBranches,
                           OutlinedFunctionsMap &FunctionsToInline);
+
+  /// \return true if the edge from \p Source to \p Target, in the function at
+  ///         \p Function, is a direct branch to the entry of a function that
+  ///         might be a tail call
+  bool isTailCallCandidate(const MetaAddress &Function,
+                           const LocalBranchSet &LocalBranches,
+                           llvm::BasicBlock *Source,
+                           llvm::BasicBlock *Target) const;
 
   /// \return a description of the call and boolean indicating whether the call
   ///         site is a tail call or not.
@@ -153,6 +191,7 @@ private:
   llvm::Function *
   createFunctionToInline(CallHandler *TheCallHandler,
                          const MetaAddress &Entry,
+                         const LocalBranchSet &LocalBranches,
                          OutlinedFunctionsMap &FunctionsToInline);
 
   void createAnyPCHooks(CallHandler *TheCallHandler, OutlinedFunction *F);

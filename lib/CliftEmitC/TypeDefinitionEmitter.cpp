@@ -19,6 +19,16 @@
 
 inline Logger TypePrinterLog{ "clift-type-definition-printer" };
 
+void TypeDefinitionEmitter::emitDeclaration(mlir::Type Type,
+                                            const DeclaratorInfo &Declarator) {
+  if (not isSingleton(Type)) {
+    CEmitter::emitDeclaration(Type, Declarator);
+    return;
+  }
+
+  emitClassDefinition(mlir::cast<clift::StructType>(Type), Declarator);
+}
+
 void TypeDefinitionEmitter::emitTypeKeyword(clift::DefinedType Type) {
   if (mlir::isa<clift::StructType>(Type))
     Tokens.emitKeyword(ptml::CTokenEmitter::Keyword::Struct);
@@ -156,6 +166,10 @@ void TypeDefinitionEmitter::emitClassDefinition(clift::ClassType Class,
                                 Class.getHandle());
 
     emitDoxygenComment(Class);
+    if (Declarator and clift::isConst(Class)) {
+      Tokens.emitKeyword(ptml::CTokenEmitter::Keyword::Const);
+      Tokens.emitSpace();
+    }
     emitTypeKeyword(Class);
 
     clift::CAttributeListBuilder AttributeBuilder{ Class.getContext(),
@@ -401,6 +415,10 @@ void TypeDefinitionEmitter::emitTypeTree(const TypeDependencyNode &Root,
   size_t NodesEmittedAlready = Emitted.size();
   for (const auto *Node : llvm::post_order_ext(&Root, Emitted)) {
     LoggerIndent PostOrderIndent{ TypePrinterLog };
+
+    // Visit singleton dependencies, but emit the singleton at its use.
+    if (isSingleton(Node->T))
+      continue;
 
     if (Node->IsDefinition) {
       revng_assert(Node->IsDefinition);

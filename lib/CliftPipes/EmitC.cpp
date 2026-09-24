@@ -34,27 +34,21 @@ void EmitC::runOnFunction(const model::Function &Function) {
   revng_assert(verifyCSemantics(Module).succeeded());
   FunctionOp MLIRFunction = getUniqueIsolatedFunction(Module, Function.Entry());
 
-  // TODO: once we emit any type definitions, in the decompiled code, we should
-  //       carry a `TypeEmitterConfiguration` set from `Options` from here
-  //       all the way to wherever the TypeDefinitionEmitter is constructed.
   TypeEmitterConfiguration TEConfiguration = {
     .TypeToOmit = {},
     .EmitMaximumEnumValue = false,
     .ExplicitPadding = true,
-    .InlineStackFrameType = false,
   };
 
   switch (Configuration.Mode) {
   case EmissionMode::Editable:
     TEConfiguration.EmitMaximumEnumValue = true;
     TEConfiguration.ExplicitPadding = false;
-    TEConfiguration.InlineStackFrameType = true;
     break;
 
   case EmissionMode::Recompilable:
     TEConfiguration.EmitMaximumEnumValue = false;
     TEConfiguration.ExplicitPadding = true;
-    TEConfiguration.InlineStackFrameType = false;
     break;
 
   default:

@@ -161,13 +161,7 @@ class Clift_EmitPTMLPass<string arg, string operation = "mlir::ModuleOp">
            "output",
            "std::string",
            /*default=*/"\"-\"",
-           "C output path">,
-
-    Option<"InlineStackFrameType",
-           "inline-stack-frame",
-           "bool",
-           /*default=*/"false",
-           "Inline the body of each function's stack-frame struct type.">
+           "C output path">
   ];
 }
 

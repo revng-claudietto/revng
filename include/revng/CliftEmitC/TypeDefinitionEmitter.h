@@ -40,20 +40,16 @@ public:
   void emitTypeDeclaration(clift::DefinedType Type);
 
 public:
-  /// Emit the full definition of a class type, optionally binding it to
-  /// a single variable declarator (`struct foo { ... } var_1`).
-  ///
-  /// The trailing `;` is NOT emitted here; it is the caller's responsibility.
-  ///
-  /// Note that this method is only public for a specific user (and we cannot
-  /// easily expose it only to a "child" emitter because `CTokenEmitter` uses
-  /// composition). Treat it as if it was protected and use `emitTypeDefinition`
-  /// in the general case.
+  /// Emit singleton structs inline at their point of use.
+  void emitDeclaration(mlir::Type Type, const DeclaratorInfo &Declarator);
+
+private:
+  /// Emit a class definition, optionally followed by a variable declarator.
+  /// The caller emits the trailing semicolon.
   void
   emitClassDefinition(clift::ClassType StructOrUnion,
                       std::optional<DeclaratorInfo> Declarator = std::nullopt);
 
-private:
   /// Emit the full definition of an enum type.
   ///
   /// The trailing `;` is NOT emitted here; it is the caller's responsibility.

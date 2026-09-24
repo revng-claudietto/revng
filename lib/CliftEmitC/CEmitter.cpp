@@ -30,6 +30,18 @@ ptml::CTokenEmitter::EntityKind CEmitter::chooseEntityKind(DefinedType Type) {
     revng_abort("Unsupported defined type");
 }
 
+bool CEmitter::isSingleton(mlir::Type Type) {
+  auto Struct = mlir::dyn_cast<clift::StructType>(Type);
+  if (not Struct)
+    return false;
+
+  for (clift::CAttributeAttr Attribute : Struct.getCAttributes())
+    if (Attribute.getName().getName() == "_SINGLETON")
+      return true;
+
+  return false;
+}
+
 class CEmitter::DeclarationEmitter {
   enum class StackItemKind {
     Terminal,
@@ -198,6 +210,10 @@ private:
             Type = F.getReturnType();
           } else {
             emitConstIfNeeded(T);
+            if (isSingleton(T)) {
+              Parent.Tokens.emitKeyword(CTE::Keyword::Struct);
+              Parent.Tokens.emitSpace();
+            }
             Parent.Tokens.emitIdentifier(T.getName(),
                                          T.getHandle(),
                                          chooseEntityKind(T),

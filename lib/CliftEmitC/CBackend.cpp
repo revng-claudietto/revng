@@ -67,22 +67,12 @@ enum class OperatorPrecedence {
   Ternary = Assignment,
 };
 
-class CliftToCEmitter : CEmitter {
+class CliftToCEmitter : TypeDefinitionEmitter {
   // Ambient precedence of the current expression.
   OperatorPrecedence CurrentPrecedence = {};
 
-  // Configuration controlling optional emission behaviour for this function,
-  // most notably whether the stack-frame struct definition should be inlined
-  // at the top of the function body.
-  TypeEmitterConfiguration Configuration;
-
 public:
-  CliftToCEmitter(ptml::CTokenEmitter &Emitter,
-                  const CDataModel &DataModel,
-                  TypeEmitterConfiguration Configuration) :
-    CEmitter(Emitter, DataModel), Configuration(Configuration) {}
-
-  using CEmitter::CEmitter;
+  using TypeDefinitionEmitter::TypeDefinitionEmitter;
 
   static OperatorPrecedence decrementPrecedence(OperatorPrecedence Precedence) {
     revng_assert(Precedence != static_cast<OperatorPrecedence>(0));
@@ -951,27 +941,7 @@ public:
       .Kind = CTE::EntityKind::LocalVariable,
     };
 
-    bool DefinitionEmitted = false;
-    if (Configuration.InlineStackFrameType) {
-      // When the configuration enables stack-frame inlining,
-      if (Var->hasAttr("clift.stack_frame")) {
-        // and the variable has been tagged as the canonical stack frame,
-        if (auto S = clift::unwrapped_dyn_cast<clift::StructType>(Type)) {
-          // emit the *definition* of the struct/union type inline instead of
-          // a regular declaration, so the C output reads as
-          // `struct _PACKED ... my_stack { ... } var_1;`.
-          //
-          // Note that this skips all the typedefs that might be there before
-          // the struct.
-          TypeDefinitionEmitter Emitter(Tokens, DataModel, Configuration);
-          Emitter.emitClassDefinition(S, Declarator);
-          DefinitionEmitted = true;
-        }
-      }
-    }
-
-    if (not DefinitionEmitted)
-      emitDeclaration(Type, Declarator);
+    emitDeclaration(Type, Declarator);
 
     if (not Var.getInitializer().empty()) {
       Tokens.emitSpace();

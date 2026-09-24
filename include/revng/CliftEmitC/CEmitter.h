@@ -114,6 +114,8 @@ public:
 public:
   //===--------------------------- Other Helpers --------------------------===//
 
+  static bool isSingleton(mlir::Type Type);
+
   static ptml::CTokenEmitter::EntityKind
   chooseEntityKind(clift::DefinedType Type);
 };

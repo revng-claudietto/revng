@@ -51,7 +51,7 @@ struct CEmissionPass : BaseT<CEmissionPass<BaseT, Impl>> {
     auto Tagging = static_cast<ptml::Tagging>(Base::EmitTags.getValue());
     ptml::CTokenEmitter Emitter(Tagging);
 
-    if (not Impl(Module, Emitter, Base::InlineStackFrameType))
+    if (not Impl(Module, Emitter))
       return Base::signalPassFailure();
 
     File->os() << Emitter.extract();
@@ -62,13 +62,11 @@ struct CEmissionPass : BaseT<CEmissionPass<BaseT, Impl>> {
 
 clift::PassPtr<mlir::ModuleOp> clift::createEmitCPass() {
   static constexpr auto Impl = [](mlir::ModuleOp Module,
-                                  ptml::CTokenEmitter &Emitter,
-                                  bool InlineStackFrameType) {
+                                  ptml::CTokenEmitter &Emitter) {
     TypeEmitterConfiguration Configuration = {
       .TypeToOmit = {},
       .EmitMaximumEnumValue = false,
       .ExplicitPadding = true,
-      .InlineStackFrameType = InlineStackFrameType,
     };
 
     Module->walk([&Emitter, &Configuration](clift::FunctionOp Function) {
@@ -87,13 +85,11 @@ using TaGHBase = clift::impl::CliftEmitTypeAndGlobalHeaderBase<T>;
 
 clift::PassPtr<mlir::ModuleOp> clift::createEmitTypeAndGlobalHeaderPass() {
   static constexpr auto Impl = [](mlir::ModuleOp Module,
-                                  ptml::CTokenEmitter &Tokens,
-                                  bool /*InlineStackFrameType*/) {
+                                  ptml::CTokenEmitter &Tokens) {
     TypeEmitterConfiguration Configuration = {
       .TypeToOmit = {},
       .EmitMaximumEnumValue = false,
       .ExplicitPadding = true,
-      .InlineStackFrameType = false,
     };
 
     emitTypeAndGlobalHeader(Tokens, Module, Configuration);
@@ -108,8 +104,7 @@ using HHBase = clift::impl::CliftEmitHelperHeaderBase<T>;
 
 clift::PassPtr<mlir::ModuleOp> clift::createEmitHelperHeaderPass() {
   static constexpr auto Impl = [](mlir::ModuleOp Module,
-                                  ptml::CTokenEmitter &Tokens,
-                                  bool /*InlineStackFrameType*/) {
+                                  ptml::CTokenEmitter &Tokens) {
     emitHelperHeader(Tokens, { Module }, model::Binary{});
     return true;
   };

@@ -1,308 +1,322 @@
-/// This analysis finds which bits of each Instruction is alive.
+/// Rebuild integer computations from value-width and backward-demand plans.
 
 //
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
-#include <set>
-#include <sstream>
-#include <tuple>
-#include <unordered_map>
-#include <vector>
+#include <algorithm>
 
-#include "llvm/ADT/PostOrderIterator.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/DerivedTypes.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DepthFirstIterator.h"
+#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/IR/CFG.h"
 #include "llvm/IR/InstIterator.h"
-#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/Support/Casting.h"
-#include "llvm/Support/CommandLine.h"
+#include "llvm/Transforms/Utils/Local.h"
 
-#include "revng/Support/CommandLine.h"
 #include "revng/Support/IRBuilder.h"
-#include "revng/Support/IRHelpers.h"
-#include "revng/TypeShrinking/BitLiveness.h"
-#include "revng/TypeShrinking/DataFlowGraph.h"
 #include "revng/TypeShrinking/TypeShrinking.h"
+#include "revng/TypeShrinking/TypeShrinkingAnalysis.h"
 
 using namespace llvm;
-
-using BitSet = std::set<int>;
-
-static cl::opt<uint32_t> MinimumWidth("min-width",
-                                      cl::init(8),
-                                      cl::desc("ignore analysis results for "
-                                               "width lower than"),
-                                      cl::value_desc("min-width"),
-                                      cl::cat(MainCategory));
+using std::min;
 
 char TypeShrinking::TypeShrinkingWrapperPass::ID = 0;
-
 using Register = RegisterPass<TypeShrinking::TypeShrinkingWrapperPass>;
 static Register
-  X("type-shrinking", "Run the type shrinking analysis", true, true);
+  X("type-shrinking", "Shrink integer computations", false, false);
 
 namespace TypeShrinking {
 
 void TypeShrinkingWrapperPass::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<BitLivenessWrapperPass>();
+  AU.addRequired<TypeShrinkingAnalysisWrapperPass>();
 }
 
-/// Returns true if each bit B of the result of Ins depends only on the bits of
-/// the operands with an index equal to B
-static bool isBitwise(const Instruction *Ins) {
-  switch (Ins->getOpcode()) {
-  case llvm::Instruction::And:
-  case llvm::Instruction::Xor:
-  case llvm::Instruction::Or:
-    return true;
+/// Materialize completed rewrite plans.
+/// A replacement represents the low ResultWidth bits of the original
+/// instruction. ResultExtension tells consumers how to recover any demanded
+/// higher bits.
+///
+/// For example, a merge of sign-extended bytes can stay narrow until its
+/// return:
+///
+///     %a = sext i8 %x to i64
+///     %b = sext i8 %y to i64
+///     %selected = select i1 %condition, i64 %a, i64 %b
+///     ret i64 %selected
+///
+/// Given a plan with an i8 result and sign extension, the replacement graph is:
+///
+///     %selected = select i1 %condition, i8 %x, i8 %y
+///     %wide = sext i8 %selected to i64
+///     ret i64 %wide
+///
+/// Arithmetic uses the same representation and operand adaptation. PHIs only
+/// need different placement: their incoming casts belong on predecessor edges.
+class Rebuilder {
+private:
+  const RewritePlans &Plans;
+  const SmallPtrSetImpl<BasicBlock *> &Reachable;
+  DenseMap<Instruction *, Value *> Replacements;
+  revng::IRBuilder B;
+
+public:
+  Rebuilder(Function &F,
+            const RewritePlans &Plans,
+            const SmallPtrSetImpl<BasicBlock *> &Reachable) :
+    Plans(Plans), Reachable(Reachable), B(F.getContext()) {}
+
+public:
+  void run(Function &F) {
+    SmallVector<Instruction *, 32> Originals;
+    DenseMap<Instruction *, unsigned> Pending;
+    SmallVector<Instruction *, 32> Ready;
+
+    // Break all cyclic dependencies before constructing any ordinary operation.
+    for (Instruction &I : instructions(F)) {
+      auto It = Plans.find(&I);
+      if (It == Plans.end())
+        continue;
+      Originals.push_back(&I);
+
+      if (auto *Phi = dyn_cast<PHINode>(&I)) {
+        B.SetInsertPoint(Phi, Phi->getDebugLoc());
+        auto *Type = B.getIntNTy(It->second.getResultWidth());
+        Replacements[Phi] = B.CreatePHI(Type, Phi->getNumIncomingValues());
+      }
+    }
+
+    for (Instruction *I : Originals) {
+      if (isa<PHINode>(I))
+        continue;
+      unsigned Count = 0;
+      for (Value *V : I->operands()) {
+        if (auto *Operand = dyn_cast<Instruction>(V)) {
+          if (Plans.contains(Operand) and not Replacements.count(Operand))
+            ++Count;
+        }
+      }
+      Pending[I] = Count;
+
+      if (Count == 0)
+        Ready.push_back(I);
+    }
+
+    while (not Ready.empty()) {
+      Instruction *I = Ready.pop_back_val();
+      Replacements[I] = rebuild(*I);
+
+      // Count uses, not distinct users: an operand can occur more than once.
+      for (Use &U : I->uses()) {
+        auto *User = dyn_cast<Instruction>(U.getUser());
+        auto It = Pending.find(User);
+        if (It != Pending.end() and --It->second == 0)
+          Ready.push_back(User);
+      }
+    }
+    revng_assert(Replacements.size() == Originals.size());
+
+    for (Instruction *I : Originals) {
+      auto *Phi = dyn_cast<PHINode>(I);
+      if (Phi == nullptr)
+        continue;
+      auto *NewPhi = cast<PHINode>(Replacements.lookup(Phi));
+      unsigned Width = Plans.at(Phi).getResultWidth();
+      for (unsigned Index = 0; Index < Phi->getNumIncomingValues(); ++Index) {
+        BasicBlock *Predecessor = Phi->getIncomingBlock(Index);
+        // Dead edges need a correctly typed operand, but no computation.
+        if (not Reachable.contains(Predecessor)) {
+          NewPhi->addIncoming(PoisonValue::get(NewPhi->getType()), Predecessor);
+          continue;
+        }
+
+        // LLVM requires identical incoming values for duplicate CFG edges.
+        if (int First = NewPhi->getBasicBlockIndex(Predecessor); First >= 0) {
+          NewPhi->addIncoming(NewPhi->getIncomingValue(First), Predecessor);
+          continue;
+        }
+        B.SetInsertPoint(Predecessor->getTerminator(), Phi->getDebugLoc());
+        NewPhi->addIncoming(adapt(Phi->getIncomingValue(Index), Width),
+                            Predecessor);
+      }
+    }
+
+    for (Instruction *I : Originals) {
+      DenseMap<BasicBlock *, Value *> EdgeCasts;
+      for (Use &U : llvm::make_early_inc_range(I->uses())) {
+        auto *User = cast<Instruction>(U.getUser());
+        if (Plans.contains(User))
+          continue;
+
+        // A deleted definition can still have uses in unreachable code.
+        if (not Reachable.contains(User->getParent())) {
+          U.set(PoisonValue::get(I->getType()));
+          continue;
+        }
+
+        unsigned Width = I->getType()->getIntegerBitWidth();
+        Value *Replacement = nullptr;
+        if (auto *Phi = dyn_cast<PHINode>(User)) {
+          BasicBlock *Predecessor = Phi->getIncomingBlock(U);
+          if (not Reachable.contains(Predecessor)) {
+            U.set(PoisonValue::get(I->getType()));
+            continue;
+          }
+
+          auto [It, Inserted] = EdgeCasts.try_emplace(Predecessor);
+          if (Inserted) {
+            B.SetInsertPoint(Predecessor->getTerminator(), I->getDebugLoc());
+            It->second = adapt(I, Width);
+          }
+          Replacement = It->second;
+        } else {
+          B.SetInsertPoint(User, I->getDebugLoc());
+          Replacement = adapt(I, Width);
+        }
+        U.set(Replacement);
+        // A retained instruction's flags can observe operand bits beyond its
+        // ordinary result demand. Do not introduce poison by changing them.
+        User->dropPoisonGeneratingFlags();
+      }
+    }
+
+    for (Instruction *I : Originals)
+      I->dropAllReferences();
+
+    for (Instruction *I : Originals) {
+      revng_assert(I->use_empty());
+      I->eraseFromParent();
+    }
   }
-  return false;
-}
 
-/// Returns true if each bit B of the result of Ins depends only on the bits of
-/// the operands with an index lower than B
-static bool isAddLike(const Instruction *Ins) {
-  switch (Ins->getOpcode()) {
-  case llvm::Instruction::Add:
-  case llvm::Instruction::Sub:
-  case llvm::Instruction::Mul:
-  case llvm::Instruction::Shl:
-  case llvm::Instruction::Select:
-  case llvm::Instruction::PHI:
-    return true;
-  }
-  return false;
-}
+private:
+  Value *adapt(Value *V, unsigned Width) {
+    bool Signed = false;
+    if (auto *I = dyn_cast<Instruction>(V)) {
+      if (auto It = Replacements.find(I); It != Replacements.end()) {
+        V = It->second;
 
-static CastInst *getIntegerExtension(Value *V) {
-  if (isa<ZExtInst>(V) or isa<SExtInst>(V))
-    return cast<CastInst>(V);
-  return nullptr;
-}
-
-/// Examples:
-/// \code
-/// icmp slt i64 (zext i32 x), (zext i32 y) -> icmp ult i32 x, y
-/// icmp slt i64 (sext i32 x), (sext i32 y) -> icmp slt i32 x, y
-/// icmp ult i64 (sext i32 x), (sext i32 y) -> icmp ult i32 x, y
-/// icmp eq i64 (zext i32 x), 42           -> icmp eq i32 x, 42
-/// icmp eq i64 (zext i32 x), 4294967296   -> unchanged
-/// \endcode
-static bool shrinkCompare(ICmpInst &Compare) {
-  if (not Compare.getOperand(0)->getType()->isIntegerTy())
-    return false;
-
-  unsigned Index = 0;
-  CastInst *Extension = getIntegerExtension(Compare.getOperand(Index));
-  if (Extension == nullptr) {
-    Index = 1;
-    Extension = getIntegerExtension(Compare.getOperand(Index));
-  }
-  if (Extension == nullptr)
-    return false;
-
-  bool IsSigned = isa<SExtInst>(Extension);
-  Type *NarrowType = Extension->getSrcTy();
-  Value *Operands[2] = {};
-  Operands[Index] = Extension->getOperand(0);
-  Value *Other = Compare.getOperand(1 - Index);
-
-  if (CastInst *OtherExtension = getIntegerExtension(Other)) {
-    // Mixed sext/zext operands do not have the same ordering or equality
-    // relation after removing their extensions.
-    if (OtherExtension->getOpcode() != Extension->getOpcode())
-      return false;
-    Operands[1 - Index] = OtherExtension->getOperand(0);
-    Type *OtherType = OtherExtension->getSrcTy();
-    if (OtherType->getIntegerBitWidth() > NarrowType->getIntegerBitWidth())
-      NarrowType = OtherType;
-  } else if (auto *Constant = dyn_cast<ConstantInt>(Other)) {
-    // Treat a constant as an extension only if truncating and extending it
-    // reproduces its exact wide bit pattern. Otherwise leave the compare alone.
-    const APInt &Wide = Constant->getValue();
-    APInt Narrow = Wide.trunc(NarrowType->getIntegerBitWidth());
-    APInt Extended = IsSigned ? Narrow.sext(Wide.getBitWidth()) :
-                                Narrow.zext(Wide.getBitWidth());
-    if (Extended != Wide)
-      return false;
-    Operands[1 - Index] = ConstantInt::get(NarrowType, Narrow);
-  } else {
-    return false;
+        if (auto *P = Plans.at(I).getIntegerRewrite())
+          Signed = P->ResultExtension == ExtensionKind::Sign;
+      }
+    }
+    return B.CreateIntCast(V, B.getIntNTy(Width), Signed);
   }
 
-  revng::IRBuilder B(&Compare);
-  auto Predicate = IsSigned ? Compare.getPredicate() :
-                              Compare.getUnsignedPredicate();
-  Value *LHS = B.CreateIntCast(Operands[0], NarrowType, IsSigned);
-  Value *RHS = B.CreateIntCast(Operands[1], NarrowType, IsSigned);
-  Value *Replacement = B.CreateICmp(Predicate, LHS, RHS);
-  Compare.replaceAllUsesWith(Replacement);
-  Compare.eraseFromParent();
-  return true;
-}
+  Value *rebuild(Instruction &I) {
+    const auto &Plan = Plans.at(&I);
+    B.SetInsertPoint(&I, I.getDebugLoc());
+
+    if (auto *Compare = Plan.getComparisonRewrite()) {
+      Value *LHS = adapt(I.getOperand(0), Compare->OperandWidth);
+      Value *RHS = adapt(I.getOperand(1), Compare->OperandWidth);
+      return B.CreateICmp(Compare->Predicate, LHS, RHS);
+    }
+    const auto &P = *Plan.getIntegerRewrite();
+    if (auto *Select = dyn_cast<SelectInst>(&I)) {
+      Value *Condition = adapt(Select->getCondition(), 1);
+      Value *True = adapt(Select->getTrueValue(), P.ResultWidth);
+      Value *False = adapt(Select->getFalseValue(), P.ResultWidth);
+      return B.CreateSelect(Condition, True, False);
+    }
+
+    if (auto *Cast = dyn_cast<CastInst>(&I)) {
+      unsigned SourceWidth = Cast->getSrcTy()->getIntegerBitWidth();
+      unsigned Width = min(SourceWidth, P.ResultWidth);
+      Value *Operand = adapt(Cast->getOperand(0), Width);
+      auto *Type = B.getIntNTy(P.ResultWidth);
+      return B.CreateIntCast(Operand, Type, isa<SExtInst>(Cast));
+    }
+    Value *LHS = adapt(I.getOperand(0), P.ComputationWidth);
+    Value *RHS = adapt(I.getOperand(1), P.ComputationWidth);
+    // Fresh operations do not inherit nowrap/exact flags, which narrowing
+    // can invalidate even when the original operation had those flags.
+    auto Opcode = Instruction::BinaryOps(I.getOpcode());
+    Value *Result = B.CreateBinOp(Opcode, LHS, RHS);
+    return B.CreateTrunc(Result, B.getIntNTy(P.ResultWidth));
+  }
+};
 
 static bool runTypeShrinking(Function &F,
-                             const BitLivenessAnalysisResults &FixedPoints) {
-  bool HasChanges = false;
+                             const TypeShrinkingAnalysisResults &Analysis) {
+  // Drop dead computations before changing their operands. Break references
+  // first so dead cycles can be erased together, as in LLVM's BDCE.
+  for (Instruction *I : llvm::reverse(Analysis.DeadInstructions)) {
+    salvageDebugInfo(*I);
+    I->dropAllReferences();
+  }
 
-  revng::IRBuilder B(F.getParent()->getContext());
-  const std::array<uint32_t, 4> Ranks = { 8, 16, 32, 64 };
-  for (auto &[I, Result] : FixedPoints) {
-    // Find the closest rank that contains all the alive bits.
-    // If there is a known rank and this is an instruction that behaves like add
-    // (the least significant bits of the result depend only on the least
-    // significant bits of the operands) we can down cast the operands and then
-    // upcast the result
-    if (I->getType()->isIntegerTy() and (isBitwise(I) or isAddLike(I))) {
-      // Bound analysis results to MinimumWidth
-      unsigned NewResultSize = std::max(MinimumWidth.getValue(), Result.Result);
-      unsigned NewOperandsSize = std::max(MinimumWidth.getValue(),
-                                          Result.Operands);
+  for (Instruction *I : Analysis.DeadInstructions)
+    I->eraseFromParent();
+  bool Changed = not Analysis.DeadInstructions.empty();
+  const auto &Plans = Analysis.Plans;
 
-      // Get old size
-      Type *OldType = I->getType();
-      unsigned OldSize = OldType->getIntegerBitWidth();
+  SmallPtrSet<BasicBlock *, 16> Reachable;
+  for (BasicBlock *Block : depth_first(&F))
+    Reachable.insert(Block);
 
-      // Find closest rank
-      auto It = llvm::lower_bound(Ranks, NewOperandsSize);
-      if (It == Ranks.end())
-        NewOperandsSize = OldSize;
-      else
-        NewOperandsSize = *It;
-      Type *NewOperandsType = B.getIntNTy(NewOperandsSize);
+  // Edge casts need an executable predecessor and an available input value.
+  // Keep the original graph if a plan would require splitting an exceptional
+  // edge or moving a terminator-defined value across it.
+  for (BasicBlock &Block : F) {
+    if (not Reachable.contains(&Block))
+      continue;
 
-      if (isBitwise(I)) {
-        NewResultSize = NewOperandsSize;
-      } else {
-        It = llvm::lower_bound(Ranks, NewResultSize);
-        if (It == Ranks.end())
-          NewResultSize = OldSize;
-        else
-          NewResultSize = *It;
-      }
-      Type *NewResultType = B.getIntNTy(NewResultSize);
+    for (PHINode &Phi : Block.phis()) {
+      if (not Phi.getType()->isIntegerTy())
+        continue;
+      auto It = Plans.find(&Phi);
+      unsigned Target = Phi.getType()->getIntegerBitWidth();
+      if (It != Plans.end())
+        Target = It->second.getResultWidth();
 
-      if (NewOperandsSize > NewResultSize)
-        NewResultSize = NewOperandsSize;
+      for (unsigned Index = 0; Index < Phi.getNumIncomingValues(); ++Index) {
+        BasicBlock *Predecessor = Phi.getIncomingBlock(Index);
+        if (not Reachable.contains(Predecessor))
+          continue;
 
-      if (NewOperandsSize < OldSize) {
-        // A shift that is defined at the old width may become poison at the
-        // new width, even if all the bits it produces are dead.
-        if (I->getOpcode() == Instruction::Shl) {
-          auto *Amount = dyn_cast<ConstantInt>(I->getOperand(1));
-          if (Amount == nullptr
-              or Amount->getValue().uge(NewResultType->getIntegerBitWidth()))
-            continue;
+        Value *Incoming = Phi.getIncomingValue(Index);
+        unsigned Source = Incoming->getType()->getIntegerBitWidth();
+        if (auto *I = dyn_cast<Instruction>(Incoming)) {
+          if (auto Input = Plans.find(I); Input != Plans.end())
+            Source = Input->second.getResultWidth();
         }
-
-        // Shrink an operand to the operand type and widen it back to the
-        // result type, wherever the builder is currently inserting.
-        auto Shrink = [&B, NewOperandsType, NewResultType](Value *Operand) {
-          return B.CreateZExt(B.CreateTrunc(Operand, NewOperandsType),
-                              NewResultType);
-        };
-
-        Value *Result = nullptr;
-
-        if (auto *Phi = dyn_cast<PHINode>(I)) {
-          // A phi cannot be rebuilt like a binary operator: it has one operand
-          // per incoming edge rather than two, and nothing may be inserted
-          // between the phis at the top of a block. Build the narrow phi in
-          // place and shrink each incoming value at the end of the block it
-          // arrives from, which is the only point that dominates the edge.
-          B.SetInsertPoint(Phi);
-          auto *NewPhi = B.CreatePHI(NewResultType,
-                                     Phi->getNumIncomingValues());
-
-          for (unsigned Index = 0; Index < Phi->getNumIncomingValues();
-               ++Index) {
-            BasicBlock *Predecessor = Phi->getIncomingBlock(Index);
-
-            // A block reaching this one along two edges is listed once per
-            // edge, and a phi requires the *same* value on each of them, so
-            // the one built for the first edge is reused for the rest.
-            if (int First = NewPhi->getBasicBlockIndex(Predecessor);
-                First >= 0) {
-              NewPhi->addIncoming(NewPhi->getIncomingValue(First), Predecessor);
-              continue;
-            }
-
-            B.SetInsertPoint(Predecessor,
-                             Predecessor->getTerminator()->getIterator());
-            NewPhi->addIncoming(Shrink(Phi->getIncomingValue(Index)),
-                                Predecessor);
-          }
-
-          Result = NewPhi;
-        } else if (auto *Select = dyn_cast<SelectInst>(I)) {
-          B.SetInsertPoint(I);
-
-          // The condition picks between the two values rather than being one
-          // of them, so it is carried over untouched.
-          Value *True = Shrink(Select->getTrueValue());
-          Value *False = Shrink(Select->getFalseValue());
-          Result = B.CreateSelect(Select->getCondition(), True, False);
-        } else {
-          B.SetInsertPoint(I);
-
-          Value *LHS = Shrink(I->getOperand(0));
-          Value *RHS = Shrink(I->getOperand(1));
-          auto Opcode = static_cast<Instruction::BinaryOps>(I->getOpcode());
-          Result = B.CreateBinOp(Opcode, LHS, RHS);
-        }
-
-        // Emit ZExts, as late as possible
-        SmallVector<std::pair<Use *, Value *>, 6> Replacements;
-        for (Use &TheUse : I->uses()) {
-          if (auto *I = cast<Instruction>(TheUse.getUser())) {
-            B.SetInsertPoint(I);
-
-            // Fix insert point for PHIs
-            if (auto *Phi = dyn_cast<PHINode>(I)) {
-              auto *BB = Phi->getIncomingBlock(TheUse);
-              auto It = BB->getTerminator()->getIterator();
-              B.SetInsertPoint(BB, It);
-            }
-
-            auto *LateUpcast = B.CreateZExt(Result, OldType);
-            Replacements.emplace_back(&TheUse, LateUpcast);
-          }
-        }
-
-        // Apply replacements
-        for (auto &[Use, I] : Replacements)
-          Use->set(I);
-
-        // Drop the original instruction
-        eraseFromParent(I);
-        HasChanges = true;
+        auto InsertionPoint = Predecessor->getFirstInsertionPt();
+        bool NoInsertionPoint = InsertionPoint == Predecessor->end();
+        bool TerminatorValue = Incoming == Predecessor->getTerminator();
+        if (Source != Target and (TerminatorValue or NoInsertionPoint))
+          return Changed;
       }
     }
   }
 
-  // Run after rebuilding the arithmetic, so this also sees the extensions
-  // introduced above. ICmp's i1 result width cannot guide operand narrowing.
-  for (Instruction &I : llvm::make_early_inc_range(instructions(F)))
-    if (auto *ICmp = dyn_cast<ICmpInst>(&I))
-      HasChanges |= shrinkCompare(*ICmp);
+  bool Rebuild = false;
+  for (const auto &[I, P] : Plans) {
+    if (P.getResultWidth() < I->getType()->getIntegerBitWidth())
+      Rebuild = true;
 
-  return HasChanges;
+    if (auto *Compare = P.getComparisonRewrite()) {
+      unsigned OperandWidth = I->getOperand(0)->getType()->getIntegerBitWidth();
+      Rebuild |= Compare->OperandWidth < OperandWidth;
+    }
+  }
+
+  if (Rebuild)
+    Rebuilder(F, Plans, Reachable).run(F);
+  return Changed or Rebuild;
 }
 
 bool TypeShrinkingWrapperPass::runOnFunction(Function &F) {
-  auto &BitLiveness = getAnalysis<BitLivenessWrapperPass>();
-  auto &FixedPoints = BitLiveness.getResult();
-  return runTypeShrinking(F, FixedPoints);
+  auto &Analysis = getAnalysis<TypeShrinkingAnalysisWrapperPass>();
+  return runTypeShrinking(F, Analysis.getResult());
 }
 
 PreservedAnalyses TypeShrinkingPass::run(Function &F,
                                          FunctionAnalysisManager &FAM) {
-  const auto &FixedPoints = FAM.getResult<BitLivenessPass>(F);
-  bool HasChanges = runTypeShrinking(F, FixedPoints);
-  return HasChanges ? PreservedAnalyses::none() : PreservedAnalyses::all();
+  const auto &Plans = FAM.getResult<TypeShrinkingAnalysisPass>(F);
+  bool Changed = runTypeShrinking(F, Plans);
+  return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
 }
 
 } // namespace TypeShrinking

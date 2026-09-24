@@ -113,6 +113,8 @@ llvm::Error AnalyzeDataLayout::run(Model &Model,
     dla::updateFuncSignatures(*M, Model.get(), ValueToTypeMap);
     dla::updateSegmentsTypes(*M, Model.get(), ValueToTypeMap, UpdatedSegments);
   }
+  // Sanitize the completed writeback before verifying the model.
+  dla::sanitizeSingletonPointers(*Model.get());
   revng_assert(Model.get()->verify(true));
 
   return llvm::Error::success();

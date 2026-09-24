@@ -38,4 +38,7 @@ bool updateSegmentsTypes(const llvm::Module &M,
                          const TypeMapT &TypeMap,
                          std::set<MetaAddress> &UpdatedSegments);
 
+/// Replace pointers to singleton structs with void pointers after writeback.
+void sanitizeSingletonPointers(model::Binary &Model);
+
 } // end namespace dla

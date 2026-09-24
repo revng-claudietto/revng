@@ -389,6 +389,9 @@ static void makeTypeDefinitions(const dla::LayoutTypeSystem &TS,
     if (not representsTypeDefinition(Node))
       continue;
 
+    // Keep recovered types separate from segment and stack-frame singletons:
+    // these types can be pointees. Only their fields are copied into
+    // singletons.
     UpcastableType NewStructOrUnion = makeStructOrUnion(Model, Node);
     revng_log(Log,
               "Mapped Node with ID: "

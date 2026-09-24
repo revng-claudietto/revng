@@ -32,6 +32,7 @@
 #include "revng/Support/Assert.h"
 #include "revng/Support/Debug.h"
 #include "revng/Support/IRHelpers.h"
+#include "revng/TupleTree/Visits.h"
 
 #include "../FuncOrCallInst.h"
 #include "DLAMakeModelTypes.h"
@@ -691,8 +692,6 @@ bool dla::updateFuncSignatures(const llvm::Module &M,
                                const TypeMapT &TypeMap) {
   if (ModelLog.isEnabled())
     Model->dump("model-before-func-update.yaml");
-  if (VerifyLog.isEnabled())
-    revng_assert(Model->verify());
 
   bool Updated = false;
 
@@ -725,10 +724,38 @@ bool dla::updateFuncSignatures(const llvm::Module &M,
 
   if (ModelLog.isEnabled())
     Model->dump("model-after-func-update.yaml");
-  if (VerifyLog.isEnabled())
-    revng_assert(Model->verify());
 
   return Updated;
+}
+
+struct SingletonPointerSanitizer {
+  void PreVisit(auto &) {}
+  void PostVisit(auto &) {}
+
+  void PostVisit(model::PointerType &Pointer) {
+    const model::Type *Pointee = Pointer.PointeeType().get();
+    while (const auto *Array = Pointee->getArray())
+      Pointee = Array->ElementType().get();
+
+    const auto *Struct = Pointee->getStruct();
+    if (Struct == nullptr or not Struct->IsSingleton())
+      return;
+
+    revng_log(Log,
+              "Replacing " << Pointer.toDebugString()
+                           << " with a void pointer (singleton " << Struct->ID()
+                           << ")");
+    auto Void = model::PrimitiveType::makeVoid();
+    Void->IsConst() = Pointer.PointeeType()->isConst();
+    Pointer.PointeeType() = std::move(Void);
+  }
+};
+
+void dla::sanitizeSingletonPointers(model::Binary &Model) {
+  // Visit inner pointers first so a pointer to a singleton pointer becomes
+  // void **, preserving the outer pointer and any enclosing arrays.
+  SingletonPointerSanitizer Visitor;
+  visitTupleTree(Visitor, Model);
 }
 
 bool dla::updateSegmentsTypes(const llvm::Module &M,

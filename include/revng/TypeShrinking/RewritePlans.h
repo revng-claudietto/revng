@@ -27,7 +27,7 @@ enum class ExtensionKind {
 };
 
 /// How to compute and represent an integer result.
-/// Applying an instance { 8, 16, ExtensionKind::Sign, true } to %r:
+/// Applying an instance { 8, 16, ExtensionKind::Sign } to %r:
 ///
 /// before:
 ///
@@ -44,13 +44,10 @@ enum class ExtensionKind {
 ///     %4 = trunc i16 %3 to i8    ; ResultWidth
 ///     %5 = sext i8 %4 to i64     ; ResultExtension, for the i64 return
 ///     ret i64 %5
-///
-/// Lossless: %5 always equals %r, rather than only in its demanded bits.
 struct IntegerRewrite {
   unsigned ResultWidth = 0;
   unsigned ComputationWidth = 0;
   ExtensionKind ResultExtension = ExtensionKind::Zero;
-  bool Lossless = false;
 };
 
 /// How to compare narrowed operands; the result is always i1.
@@ -168,15 +165,6 @@ public:
     if (auto *Integer = getIntegerRewrite())
       return Integer->ResultWidth;
     return 1;
-  }
-
-  /// Whether extending the result back to the original width reproduces the
-  /// original value; a comparison always does.
-  bool isLossless() const {
-    revng_assert(*this);
-    if (auto *Integer = getIntegerRewrite())
-      return Integer->Lossless;
-    return true;
   }
 };
 

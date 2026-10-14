@@ -5,7 +5,7 @@
 ---
 Functions:
   - Name: function
-    CallSitePrototypes:
+    CallSites:
       - Prototype:
           Kind: DefinedType
           Definition: "/TypeDefinitions/1815-RawFunctionDefinition"

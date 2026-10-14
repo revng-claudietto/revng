@@ -50,11 +50,9 @@ inline auto getPrototype(ConstOrNot<model::Binary> auto &Binary,
                          MetaAddress CallerFunctionAddress,
                          const efa::BasicBlock &CallerBlock,
                          const efa::CallEdge &Edge) {
-  auto &CallSitePrototypes = Binary.Functions()
-                               .at(CallerFunctionAddress)
-                               .CallSitePrototypes();
-  auto It = CallSitePrototypes.find(CallerBlock.ID().start());
-  if (It != CallSitePrototypes.end())
+  auto &CallSites = Binary.Functions().at(CallerFunctionAddress).CallSites();
+  auto It = CallSites.find(CallerBlock.ID().start());
+  if (It != CallSites.end())
     return It->prototype();
 
   if (Edge.Type() == efa::FunctionEdgeType::FunctionCall) {

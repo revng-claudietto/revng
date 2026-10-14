@@ -256,7 +256,7 @@ bool Function::verify(VerifyHelper &VH) const {
       return VH.fail("Stack frame type does not verify.", *this);
   }
 
-  for (auto &CallSitePrototype : CallSitePrototypes())
+  for (auto &CallSitePrototype : CallSites())
     if (not CallSitePrototype.verify(VH))
       return VH.fail();
 

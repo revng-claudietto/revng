@@ -889,10 +889,10 @@ void DetectABI::finalizeModel() {
 
       for (auto &Edge : Block.Successors()) {
         if (auto *CE = llvm::dyn_cast<efa::CallEdge>(Edge.get())) {
-          auto &CallSitePrototypes = Function->CallSitePrototypes();
+          auto &CallSites = Function->CallSites();
           bool IsDirect = CE->Destination().isValid();
           bool IsDynamic = not CE->DynamicFunction().empty();
-          bool HasInfoOnEdge = CallSitePrototypes.contains(BlockAddress);
+          bool HasInfoOnEdge = CallSites.contains(BlockAddress);
           if (not IsDynamic and not IsDirect and not HasInfoOnEdge) {
             // It's an indirect call for which we have now call site information
             auto Prototype = buildPrototypeForIndirectCall(Summary, Block);
@@ -902,9 +902,9 @@ void DetectABI::finalizeModel() {
             bool IsTailCall = false;
 
             // Register new prototype
-            Function->CallSitePrototypes().emplace(BlockAddress,
-                                                   std::move(Prototype),
-                                                   IsTailCall);
+            Function->CallSites().emplace(BlockAddress,
+                                          std::move(Prototype),
+                                          IsTailCall);
           }
         }
       }

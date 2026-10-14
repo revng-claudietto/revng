@@ -195,9 +195,8 @@ FunctionSummaryOracle::getExactCallSite(MetaAddress Entry,
 
     const model::Function &Function = Binary.Functions().at(Entry);
 
-    // TODO: should CallSitePrototypes be index by BasicBlockID?
-    if (auto *CallSite = Function.CallSitePrototypes()
-                           .tryGet(CallSiteAddress.start())) {
+    // TODO: should CallSites be index by BasicBlockID?
+    if (auto *CallSite = Function.CallSites().tryGet(CallSiteAddress.start())) {
 
       AttributesSet Attributes;
       for (auto &ToCopy : CallSite->Attributes())

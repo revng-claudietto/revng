@@ -34,7 +34,7 @@ void preserveMetadata(const model::Function &Old, model::Function &New) {
   New.Comments() = Old.Comments();
   New.LocalVariables() = Old.LocalVariables();
   New.GotoLabels() = Old.GotoLabels();
-  New.CallSitePrototypes() = Old.CallSitePrototypes();
+  New.CallSites() = Old.CallSites();
   New.ExportedNames() = Old.ExportedNames();
   New.StackFrame() = Old.StackFrame();
 

@@ -1,0 +1,9 @@
+#
+# This file is distributed under the MIT License. See LICENSE.md for details.
+#
+
+.Functions[0].CallSitePrototypes,null
+.Functions[0].CallSites[0].CallerBlockAddress,"0x1004:Code_aarch64"
+.Functions[0].CallSites[0].IsTailCall,true
+.Functions[0].CallSites[0].Attributes[0],"NoReturn"
+.Functions[0].CallSites[0].Prototype.Definition,"/TypeDefinitions/0-CABIFunctionDefinition"

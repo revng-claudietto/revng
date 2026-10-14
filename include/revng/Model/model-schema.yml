@@ -2,7 +2,7 @@
 # This file is distributed under the MIT License. See LICENSE.md for details.
 #
 
-version: 12
+version: 13
 root_type: Binary
 
 definitions:
@@ -847,7 +847,7 @@ definitions:
           type: MutableSet
           elementType: FunctionAttribute
 
-      - name: CallSitePrototypes
+      - name: CallSites
         doc: |-
           Information about specific call sites within this function.
         sequence:

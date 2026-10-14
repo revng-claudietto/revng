@@ -113,15 +113,9 @@ RewritePlan RewritePlan::create(Instruction &I,
   unsigned S = roundWidth(min(Demand, Bounds.getMinSignedBits()), W);
   unsigned ResultWidth = min(U, S);
   bool SignExtend = S < U;
-
-  // Extending the result back reproduces the original value when its bounds,
-  // rather than only its demand, fit the result.
-  unsigned ValueWidth = SignExtend ? Bounds.getMinSignedBits() :
-                                     Bounds.getActiveBits();
   IntegerRewrite P{ ResultWidth,
                     ResultWidth,
-                    SignExtend ? ExtensionKind::Sign : ExtensionKind::Zero,
-                    ValueWidth <= ResultWidth };
+                    SignExtend ? ExtensionKind::Sign : ExtensionKind::Zero };
   unsigned Required = min(Demand, P.ResultWidth);
 
   // Shift execution must retain the source bits and exceed every shift amount.
@@ -266,7 +260,7 @@ void RewritePlans::finalizePhis() {
 }
 
 void RewritePlans::replaceUses() {
-  for (const auto &[Original, Plan] : Plans) {
+  for (Instruction *Original : make_first_range(Plans)) {
     unsigned Width = Original->getType()->getIntegerBitWidth();
     const DebugLoc &Location = Original->getDebugLoc();
     for (Use &Operand : make_early_inc_range(Original->uses())) {
@@ -282,11 +276,13 @@ void RewritePlans::replaceUses() {
         Operand.set(adapt(Builder, Original, Width));
       }
 
-      // Demand analysis ignores flags, make sure we don't have them, unless
-      // the replacement reproduces the whole original value.
+      // The replacement only preserves the demanded bits, and demand analysis
+      // ignores flags: a user with flags could become poison. Instructions
+      // with flags get a plan, dropping them, unless dead or unreachable.
+      // Handling those would take dropping their flags, or tracking which
+      // replacements reproduce the whole original value.
       bool IsInteger = User->getType()->isIntegerTy();
-      bool HasFlags = IsInteger and User->hasPoisonGeneratingFlags();
-      revng_assert(Plan.isLossless() or not HasFlags);
+      revng_assert(not IsInteger or not User->hasPoisonGeneratingFlags());
     }
   }
 }

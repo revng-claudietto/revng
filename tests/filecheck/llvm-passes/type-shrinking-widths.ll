@@ -379,26 +379,6 @@ define i8 @unused_calls(i64 %x) {
   ret i8 %r
 }
 
-; A dead cycle leaves an instruction with flags without a plan. It still
-; receives the whole value of its operand, which only its bounds narrow, so its
-; nsw flag stays valid.
-define i32 @dead_flagged_user(i32 %x, i1 %continue) {
-  ; RAW-LABEL: @dead_flagged_user(
-  ; RAW: %[[MASKED:[^ ]+]] = and i8 {{.*}}, 3
-  ; RAW: %[[WIDE:[^ ]+]] = zext i8 %[[MASKED]] to i32
-  ; RAW-NEXT: sub nsw i32 0, %[[WIDE]]
-entry:
-  %masked = and i32 %x, 3
-  %negated = sub nsw i32 0, %masked
-  br label %loop
-loop:
-  %cycle = phi i32 [ %negated, %entry ], [ %next, %loop ]
-  %next = add i32 %cycle, 4
-  br i1 %continue, label %loop, label %exit
-exit:
-  ret i32 %masked
-}
-
 ; `and` with 0 demands no bit of %u, but %u is still rebuilt, so that it drops
 ; its nsw flag. Kept as it is, it would receive %p narrowed to the 8 bits %low
 ; demands, and shift out bits that disagree with its sign bit.

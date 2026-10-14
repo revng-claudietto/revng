@@ -45,15 +45,18 @@ TypeShrinkingAnalysisPass::run(Function &F, FunctionAnalysisManager &) {
     return Ranges.range(U.get());
   });
 
-  // Retain a low-bit prefix covering LLVM's demanded mask. Range queries
-  // finish before rebuilding invalidates either analysis.
+  const DataLayout &Layout = F.getParent()->getDataLayout();
+  PlanningFacts Facts(Ranges, Layout, AC, DT, Result);
+
+  // Retain the bits in LLVM's demanded mask. Planning finishes before
+  // rebuilding invalidates the analyses it reads.
   ReversePostOrderTraversal<Function *> Blocks(&F);
   for (BasicBlock *Block : Blocks) {
     for (Instruction &I : *Block) {
       if (not I.getType()->isIntegerTy() or Demands.isInstructionDead(&I))
         continue;
 
-      unsigned Demand = Demands.getDemandedBits(&I).getActiveBits();
+      APInt Demand = Demands.getDemandedBits(&I);
 
       // This pass leaves dead code for DCE, but a dead instruction still
       // executes, and demand analysis attributes nothing to it. Narrowing an
@@ -69,12 +72,12 @@ TypeShrinkingAnalysisPass::run(Function &F, FunctionAnalysisManager &) {
       // available, as bounds hold for the value a dead user reads too.
       for (User *U : I.users()) {
         if (Demands.isInstructionDead(cast<Instruction>(U))) {
-          Demand = I.getType()->getIntegerBitWidth();
+          Demand = APInt::getAllOnes(I.getType()->getIntegerBitWidth());
           break;
         }
       }
 
-      if (auto Plan = RewritePlan::create(I, Demand, Ranges))
+      if (auto Plan = RewritePlan::create(I, Demand, Facts))
         Result.insert(I, Plan);
     }
   }

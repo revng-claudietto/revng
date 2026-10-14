@@ -474,6 +474,7 @@ set(FILECHECK_TESTS
     llvm-passes/type-shrinking-flags.ll
     llvm-passes/type-shrinking-ranges.ll
     llvm-passes/type-shrinking-widths.ll
+    llvm-passes/type-shrinking-windows.ll
     llvm-passes/type-shrinking.ll
     model/drop-types/ArrayPropagation.yml
     model/drop-types/DropStructField.yml

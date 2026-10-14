@@ -1110,6 +1110,9 @@ definitions:
       - CallerBlockAddress
 
     fields:
+      # TODO: identify call sites by the address of the call instruction. The
+      #       start of the basic block changes whenever the block is split or
+      #       merged with another one.
       - name: CallerBlockAddress
         doc: Address of the basic block of the call.
         type: MetaAddress

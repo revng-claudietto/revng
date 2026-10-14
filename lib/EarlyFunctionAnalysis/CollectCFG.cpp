@@ -39,11 +39,12 @@ alwaysInlineCallees(const efa::ControlFlowGraph &CFG,
       if (Callee.isInvalid())
         continue;
 
-      auto It = Binary.Functions().find(Callee);
-      if (It == Binary.Functions().end())
+      const auto *Function = Binary.Functions().tryGet(Callee);
+      if (Function == nullptr)
         continue;
 
-      if (It->Attributes().contains(model::FunctionAttribute::AlwaysInline))
+      if (Function->Attributes()
+            .contains(model::FunctionAttribute::AlwaysInline))
         Result.insert(Callee);
     }
   }

@@ -244,6 +244,7 @@ set(FILECHECK_TESTS
     clift/implicit-cast-elision/assign.mlir
     clift/implicit-cast-elision/if.mlir
     clift/implicit-cast-elision/call.mlir
+    clift/implicit-cast-elision/comparison.mlir
     clift/implicit-cast-elision/neg.mlir
     clift/implicit-cast-elision/not.mlir
     clift/implicit-cast-elision/shl.mlir

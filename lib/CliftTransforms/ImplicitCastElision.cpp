@@ -2,6 +2,8 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include <limits>
+
 #include "revng/ADT/ScopedExchange.h"
 #include "revng/Clift/CliftC.h"
 #include "revng/Clift/CliftOpHelpers.h"
@@ -99,7 +101,7 @@ private:
   mlir::Type getCommonIntegerType(mlir::MLIRContext *Context,
                                   llvm::ArrayRef<mlir::Type> Types) {
     uint64_t MaxSize = 0;
-    uint64_t MaxIsUnsigned = false;
+    bool MaxIsUnsigned = false;
 
     for (mlir::Type T : Types) {
       auto IntType = getUnderlyingIntegerType(T);
@@ -111,7 +113,7 @@ private:
       }
 
       if (IntSize == MaxSize)
-        MaxSize |= IntType.isUnsigned();
+        MaxIsUnsigned |= IntType.isUnsigned();
     }
 
     if (MaxSize < DataModel.getIntSize()) {
@@ -221,6 +223,38 @@ private:
       elideCoercingContextCasts(Op->getOpOperand(I + 1));
   }
 
+  /// Return the size N, in bytes, such that the integer Cast preserves the
+  /// value of its operand modulo 2^(8 * N), or the maximum size if it preserves
+  /// it exactly.
+  static uint64_t getPreservedSize(CastOpInterface Cast) {
+    constexpr uint64_t Exact = std::numeric_limits<uint64_t>::max();
+    auto Source = getUnderlyingIntegerType(Cast.getValueType());
+    auto Result = getUnderlyingIntegerType(Cast.getType());
+
+    if (mlir::isa<BitCastOp>(Cast))
+      return Source.isSigned() == Result.isSigned() ? Exact : Result.getSize();
+
+    // An extension preserves the value when it matches the source signedness
+    if (mlir::isa<ZeroExtendOp>(Cast))
+      return Source.isSigned() ? Source.getSize() : Exact;
+
+    if (mlir::isa<SignExtendOp>(Cast)) {
+      if (not Source.isSigned())
+        return Source.getSize();
+      return Result.isSigned() ? Exact : Result.getSize();
+    }
+
+    if (mlir::isa<TruncateOp>(Cast))
+      return Result.getSize();
+
+    return 0;
+  }
+
+  /// Without the cast, C converts the operand of the cast to the operator type
+  /// directly. Both conversions agree when the cast preserves the value modulo
+  /// the size of the operator type. Below the size of int this matters even if
+  /// the operator type is unchanged: `(int8_t) x < 0` with an unsigned 8-bit x
+  /// is not `x < 0`, although both compare an int.
   void elideArithmeticCasts(mlir::Operation *Op) {
     llvm::SmallVector<mlir::Type> Types(Op->getOperandTypes());
     auto OperatorType = getArithmeticOperatorType(Op, Types);
@@ -233,6 +267,13 @@ private:
 
       mlir::Type CastOperandType = Cast.getValueType();
       if (not unwrapped_isa<IntegralType>(CastOperandType))
+        continue;
+
+      // Only shifts convert their second operand to a type of its own
+      mlir::Type Target = I == 1 and OperatorType.T2 ? OperatorType.T2 :
+                                                       OperatorType.T1;
+      auto TargetSize = getUnderlyingIntegerType(Target).getSize();
+      if (TargetSize > getPreservedSize(Cast))
         continue;
 
       ScopedExchange Transaction(T, CastOperandType);

@@ -32,13 +32,13 @@ define i64 @shl32(i64 %0) {
 }
 
 ; Narrowing this shift to i8 would introduce poison: its amount equals the
-; new width. Keep a wider execution type; InstCombine folds it to zero.
+; new width. It shifts every bit of the low byte out, so the result is zero.
 define i64 @shl8_overshift(i64 %a) {
   ; CHECK-LABEL: @shl8_overshift(
   ; CHECK: ret i64 0
   ; DIRECT-LABEL: @shl8_overshift(
-  ; DIRECT: shl i16 {{.*}}, 8
-  ; DIRECT: ret i64
+  ; DIRECT-NOT: shl
+  ; DIRECT: ret i64 0
   %shifted = shl i64 %a, 8
   %masked = and i64 %shifted, 255
   ret i64 %masked

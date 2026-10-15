@@ -4,13 +4,16 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
+#include <optional>
 #include <tuple>
+#include <utility>
 #include <variant>
 
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instructions.h"
 
 #include "revng/Support/Assert.h"
 #include "revng/Support/Debug.h"
@@ -24,13 +27,26 @@ namespace TypeShrinking {
 /// Return the integer width, or zero for a non-integer value.
 unsigned width(const llvm::Value *V);
 
+/// Return the amount \p I shifts by, if it is a shift by a constant smaller
+/// than its width. Such a shift moves windows of bits instead of computing on
+/// them.
+std::optional<unsigned> getShiftAmount(const llvm::Instruction &I);
+
 enum class ExtensionKind {
   Zero,
   Sign
 };
 
-/// How to compute and represent an integer result.
-/// Applying an instance { 8, 16, ExtensionKind::Sign } to %r:
+/// How to compute and represent an integer result: as the window of its bits
+/// from Offset to Offset + ResultWidth. Extending the window as
+/// ResultExtension says, then shifting it left by Offset, rebuilds the
+/// demanded bits of the original value.
+///
+/// The window is computed from windows of the operands, see getOperandOffset,
+/// at ComputationWidth. Only divisions and shifts by a variable amount need it
+/// wider than ResultWidth, and they compute from bit zero. Usually Offset is
+/// zero and the window holds the low bits. Applying
+/// { 0, 8, 16, ExtensionKind::Sign } to %r:
 ///
 /// before:
 ///
@@ -47,14 +63,51 @@ enum class ExtensionKind {
 ///     %4 = trunc i16 %3 to i8    ; ResultWidth
 ///     %5 = sext i8 %4 to i64     ; ResultExtension, for the i64 return
 ///     ret i64 %5
+///
+/// A window above bit zero requires the bits below it to be known zero or not
+/// demanded. Applying { 16, 16, 16, ExtensionKind::Zero } to %field:
+///
+/// before:
+///
+///     %product = mul i64 %x, 327680         ; 5 << 16
+///     %field = and i64 %product, 4294901760 ; 0xffff0000
+///     ret i64 %field
+///
+/// after:
+///
+///     %1 = trunc i64 %x to i16
+///     %2 = mul i16 %1, 5         ; %product, as a window from bit 16 too
+///     %3 = and i16 %2, -1        ; ResultWidth
+///     %4 = zext i16 %3 to i64    ; ResultExtension, for the i64 return
+///     %5 = shl i64 %4, 16        ; Offset
+///     ret i64 %5
 struct IntegerRewrite {
+  unsigned Offset = 0;
   unsigned ResultWidth = 0;
   unsigned ComputationWidth = 0;
   ExtensionKind ResultExtension = ExtensionKind::Zero;
+
+  /// Return where the window of operand \p Index of \p I starts, which
+  /// computing the window this plan selects for the result of \p I reads.
+  /// Return std::nullopt for an operand that is not read as a window, such as
+  /// the condition of a select. With an Offset of 16:
+  ///
+  ///     and i64 %x, %y        ; %x and %y from bit 16
+  ///     lshr i64 %x, 8        ; %x from bit 24
+  ///     shl i64 %x, 16        ; %x from bit 0
+  ///     mul i64 %x, 327680    ; %x from bit 0, 327680 from bit 16, so 5
+  ///
+  /// Past the top of their operand, right shifts and extensions read copies
+  /// of its sign or zeros, as they do.
+  std::optional<unsigned> getOperandOffset(const llvm::Instruction &I,
+                                           unsigned Index) const;
 };
 
-/// How to compare narrowed operands; the result is always i1.
-/// Applying an instance { 8, ICMP_ULT } to %c:
+/// How to compare narrowed operands; the result is always i1. The operands are
+/// compared on their bits from Offset to Offset + OperandWidth: the bits below
+/// cannot change the result, and those above extend the compared ones.
+///
+/// Applying { 0, 8, ICMP_ULT } to %c:
 ///
 /// before:
 ///
@@ -65,7 +118,20 @@ struct IntegerRewrite {
 /// after:
 ///
 ///     %1 = icmp ult i8 %x, %y    ; OperandWidth, Predicate
+///
+/// Applying { 16, 16, ICMP_ULT } to %c, whose boundary is 201 << 16:
+///
+/// before:
+///
+///     %c = icmp ult i32 %x, 13172736
+///
+/// after:
+///
+///     %1 = lshr i32 %x, 16       ; Offset
+///     %2 = trunc i32 %1 to i16   ; OperandWidth
+///     %3 = icmp ult i16 %2, 201
 struct ComparisonRewrite {
+  unsigned Offset = 0;
   unsigned OperandWidth = 0;
   llvm::CmpInst::Predicate Predicate = {};
 };
@@ -127,8 +193,9 @@ private:
   llvm::DenseMap<llvm::Instruction *, llvm::Value *> Replacements;
 
   /// The values adapted at the end of a predecessor, by predecessor, original
-  /// value and width.
-  using EdgeValueKey = std::tuple<llvm::BasicBlock *, llvm::Value *, unsigned>;
+  /// value and window, as offset and width.
+  using Window = std::pair<unsigned, unsigned>;
+  using EdgeValueKey = std::tuple<llvm::BasicBlock *, llvm::Value *, Window>;
   llvm::DenseMap<EdgeValueKey, llvm::Value *> EdgeValues;
 
 public:
@@ -183,12 +250,23 @@ public:
 
 private:
   llvm::Value *rebuild(llvm::Instruction &I, const RewritePlan &Plan);
+  llvm::Value *moveWindow(revng::IRBuilder &Builder,
+                          llvm::Instruction &I,
+                          const IntegerRewrite &Plan);
   void finalizePhis();
   void replaceUses();
   void eraseOriginals();
-  llvm::Value *adapt(revng::IRBuilder &Builder, llvm::Value *V, unsigned Width);
+  llvm::Value *adapt(revng::IRBuilder &Builder,
+                     llvm::Value *V,
+                     unsigned Offset,
+                     unsigned Width);
+  llvm::Value *adaptOperand(revng::IRBuilder &Builder,
+                            llvm::Instruction &I,
+                            const IntegerRewrite &Plan,
+                            unsigned Index);
   llvm::Value *adaptOnEdge(llvm::BasicBlock *Predecessor,
                            llvm::Value *V,
+                           unsigned Offset,
                            unsigned Width,
                            const llvm::DebugLoc &Location);
 };

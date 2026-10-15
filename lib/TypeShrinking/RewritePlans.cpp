@@ -5,11 +5,12 @@
 // This file is distributed under the MIT License. See LICENSE.md for details.
 //
 
-#include <algorithm>
+#include <optional>
 
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/IR/AssemblyAnnotationWriter.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/PatternMatch.h"
 #include "llvm/Support/FormattedStream.h"
 
 #include "revng/Support/Debug.h"
@@ -17,12 +18,59 @@
 #include "revng/TypeShrinking/RewritePlans.h"
 
 using namespace llvm;
-using std::min;
 
 namespace TypeShrinking {
 
 unsigned width(const Value *V) {
   return V->getType()->isIntegerTy() ? V->getType()->getIntegerBitWidth() : 0;
+}
+
+std::optional<unsigned> getShiftAmount(const Instruction &I) {
+  if (not I.isShift())
+    return std::nullopt;
+
+  auto *Amount = dyn_cast<ConstantInt>(I.getOperand(1));
+  if (Amount == nullptr or Amount->getValue().uge(width(&I)))
+    return std::nullopt;
+
+  return Amount->getZExtValue();
+}
+
+std::optional<unsigned> IntegerRewrite::getOperandOffset(const Instruction &I,
+                                                         unsigned Index) const {
+  switch (I.getOpcode()) {
+  case Instruction::Select:
+    if (Index == 0)
+      return std::nullopt;
+    return Offset;
+
+  // A shift by a constant moves the window, read from its first operand. A
+  // shift by a variable amount computes from bit zero.
+  case Instruction::Shl:
+  case Instruction::LShr:
+  case Instruction::AShr: {
+    std::optional<unsigned> Shift = getShiftAmount(I);
+    if (not Shift)
+      return Offset;
+    if (Index == 1)
+      return std::nullopt;
+    if (I.getOpcode() != Instruction::Shl)
+      return Offset + *Shift;
+
+    // Below its amount, a left shift brings in zeros
+    return Offset > *Shift ? Offset - *Shift : 0;
+  }
+
+  // The low zeros of the constant multiplier shift the other operand up, see
+  // Planner::getWindowLimit
+  case Instruction::Mul: {
+    unsigned Multiplier = isa<ConstantInt>(I.getOperand(1)) ? 1 : 0;
+    return Index == Multiplier ? Offset : 0;
+  }
+
+  default:
+    return Offset;
+  }
 }
 
 void RewritePlans::insert(Instruction &I, const RewritePlan &Plan) {
@@ -67,38 +115,106 @@ bool RewritePlans::apply() {
 
 Value *RewritePlans::rebuild(Instruction &I, const RewritePlan &Plan) {
   revng::IRBuilder Builder(&I, I.getDebugLoc());
-  unsigned ResultWidth = Plan.getResultWidth();
-  auto *ResultType = Builder.getIntNTy(ResultWidth);
 
-  Value *Result = nullptr;
   if (auto *Compare = Plan.getComparisonRewrite()) {
-    Value *LHS = adapt(Builder, I.getOperand(0), Compare->OperandWidth);
-    Value *RHS = adapt(Builder, I.getOperand(1), Compare->OperandWidth);
-    Result = Builder.CreateICmp(Compare->Predicate, LHS, RHS);
-  } else if (auto *Phi = dyn_cast<PHINode>(&I)) {
-    Result = Builder.CreatePHI(ResultType, Phi->getNumIncomingValues());
-  } else if (auto *Select = dyn_cast<SelectInst>(&I)) {
-    Value *Condition = adapt(Builder, Select->getCondition(), 1);
-    Value *True = adapt(Builder, Select->getTrueValue(), ResultWidth);
-    Value *False = adapt(Builder, Select->getFalseValue(), ResultWidth);
-    Result = Builder.CreateSelect(Condition, True, False);
-  } else if (auto *Cast = dyn_cast<CastInst>(&I)) {
-    unsigned SourceWidth = Cast->getSrcTy()->getIntegerBitWidth();
-    unsigned Width = min(SourceWidth, ResultWidth);
-    Value *Operand = adapt(Builder, Cast->getOperand(0), Width);
-    Result = Builder.CreateIntCast(Operand, ResultType, isa<SExtInst>(Cast));
-  } else {
-    unsigned Width = Plan.getIntegerRewrite()->ComputationWidth;
-    Value *LHS = adapt(Builder, I.getOperand(0), Width);
-    Value *RHS = adapt(Builder, I.getOperand(1), Width);
-    // Fresh operations do not inherit nowrap/exact flags, which narrowing
-    // can invalidate even when the original operation had those flags.
-    auto Opcode = Instruction::BinaryOps(I.getOpcode());
-    Value *Operation = Builder.CreateBinOp(Opcode, LHS, RHS);
-    Result = Builder.CreateTrunc(Operation, ResultType);
+    unsigned Offset = Compare->Offset;
+    unsigned Width = Compare->OperandWidth;
+    Value *LHS = adapt(Builder, I.getOperand(0), Offset, Width);
+    Value *RHS = adapt(Builder, I.getOperand(1), Offset, Width);
+    return Builder.CreateICmp(Compare->Predicate, LHS, RHS);
   }
 
-  return Result;
+  const IntegerRewrite &Integer = *Plan.getIntegerRewrite();
+  auto *ResultType = Builder.getIntNTy(Integer.ResultWidth);
+  if (auto *Phi = dyn_cast<PHINode>(&I))
+    return Builder.CreatePHI(ResultType, Phi->getNumIncomingValues());
+
+  if (auto *Select = dyn_cast<SelectInst>(&I)) {
+    Value *Condition = adapt(Builder, Select->getCondition(), 0, 1);
+    Value *True = adaptOperand(Builder, I, Integer, 1);
+    Value *False = adaptOperand(Builder, I, Integer, 2);
+    return Builder.CreateSelect(Condition, True, False);
+  }
+
+  // Casts and shifts by a constant move the window across their operand
+  if (isa<CastInst>(&I) or getShiftAmount(I))
+    return moveWindow(Builder, I, Integer);
+
+  // Fresh operations do not inherit nowrap/exact flags, which narrowing can
+  // invalidate even when the original operation had those flags.
+  Value *LHS = adaptOperand(Builder, I, Integer, 0);
+  Value *RHS = adaptOperand(Builder, I, Integer, 1);
+  auto Opcode = Instruction::BinaryOps(I.getOpcode());
+  Value *Operation = Builder.CreateBinOp(Opcode, LHS, RHS);
+  return Builder.CreateTrunc(Operation, ResultType);
+}
+
+/// Return the bits of \p V from \p Offset to \p Offset + \p Width. Those past
+/// its top are copies of its sign if \p Signed, zeros otherwise.
+static Value *extractBits(revng::IRBuilder &Builder,
+                          Value *V,
+                          unsigned Offset,
+                          unsigned Width,
+                          bool Signed) {
+  auto *Type = Builder.getIntNTy(Width);
+  unsigned Available = width(V);
+  bool PastTop = Offset + Width > Available;
+  if (Offset >= Available) {
+    if (not Signed)
+      return ConstantInt::get(Type, 0);
+    Offset = Available - 1;
+  }
+
+  if (Offset != 0) {
+    V = Signed and PastTop ? Builder.CreateAShr(V, Offset) :
+                             Builder.CreateLShr(V, Offset);
+  }
+
+  return Builder.CreateIntCast(V, Type, Signed);
+}
+
+/// Rebuild \p I, a cast or a shift by a constant, by moving the window \p Plan
+/// selects across its operand, see getOperandOffset.
+Value *RewritePlans::moveWindow(revng::IRBuilder &Builder,
+                                Instruction &I,
+                                const IntegerRewrite &Plan) {
+  Value *Operand = I.getOperand(0);
+  unsigned Read = *Plan.getOperandOffset(I, 0);
+  unsigned Width = Plan.ResultWidth;
+
+  // A left shift reads its operand below the window, but not below bit zero:
+  // the zeros it brings in there remain to be shifted in
+  if (I.getOpcode() == Instruction::Shl) {
+    unsigned Remaining = *getShiftAmount(I) + Read - Plan.Offset;
+    if (Remaining >= Width)
+      return ConstantInt::get(Builder.getIntNTy(Width), 0);
+
+    Value *Window = adapt(Builder, Operand, Read, Width);
+    if (Remaining == 0)
+      return Window;
+    return Builder.CreateShl(Window, Remaining);
+  }
+
+  // Right shifts and extensions read their operand from above, and past its
+  // top get copies of its sign or zeros, as they do
+  if (Read + Width <= width(Operand))
+    return adapt(Builder, Operand, Read, Width);
+
+  bool Signed = isa<SExtInst>(&I) or I.getOpcode() == Instruction::AShr;
+  Value *Whole = adapt(Builder, Operand, 0, width(Operand));
+  return extractBits(Builder, Whole, Read, Width, Signed);
+}
+
+/// Return the window of operand \p Index of \p I that computing the window
+/// \p Plan selects for the result of \p I reads, see getOperandOffset, at the
+/// width of the computation.
+Value *RewritePlans::adaptOperand(revng::IRBuilder &Builder,
+                                  Instruction &I,
+                                  const IntegerRewrite &Plan,
+                                  unsigned Index) {
+  std::optional<unsigned> Offset = Plan.getOperandOffset(I, Index);
+  revng_assert(Offset);
+  return adapt(Builder, I.getOperand(Index), *Offset, Plan.ComputationWidth);
 }
 
 void RewritePlans::finalizePhis() {
@@ -108,12 +224,17 @@ void RewritePlans::finalizePhis() {
       continue;
 
     auto *NewPhi = cast<PHINode>(Replacements.lookup(Phi));
+    unsigned Offset = Plan.getIntegerRewrite()->Offset;
     unsigned Width = Plan.getResultWidth();
     for (unsigned Index = 0; Index < Phi->getNumIncomingValues(); ++Index) {
       BasicBlock *Predecessor = Phi->getIncomingBlock(Index);
       Value *Incoming = Phi->getIncomingValue(Index);
       const DebugLoc &Location = Phi->getDebugLoc();
-      Value *Adapted = adaptOnEdge(Predecessor, Incoming, Width, Location);
+      Value *Adapted = adaptOnEdge(Predecessor,
+                                   Incoming,
+                                   Offset,
+                                   Width,
+                                   Location);
       NewPhi->addIncoming(Adapted, Predecessor);
     }
   }
@@ -130,10 +251,10 @@ void RewritePlans::replaceUses() {
 
       if (auto *Phi = dyn_cast<PHINode>(User)) {
         BasicBlock *Predecessor = Phi->getIncomingBlock(Operand);
-        Operand.set(adaptOnEdge(Predecessor, Original, Width, Location));
+        Operand.set(adaptOnEdge(Predecessor, Original, 0, Width, Location));
       } else {
         revng::IRBuilder Builder(User, Location);
-        Operand.set(adapt(Builder, Original, Width));
+        Operand.set(adapt(Builder, Original, 0, Width));
       }
 
       // The replacement only preserves the demanded bits, and demand analysis
@@ -157,23 +278,52 @@ void RewritePlans::eraseOriginals() {
   }
 }
 
-/// Convert \p V to \p Width at the insertion point of \p Builder. A planned
-/// instruction is represented by its replacement, extended as its plan selects.
-Value *
-RewritePlans::adapt(revng::IRBuilder &Builder, Value *V, unsigned Width) {
+/// Return the bits of \p V from \p Offset to \p Offset + \p Width, at the
+/// insertion point of \p Builder. A planned instruction is represented by its
+/// replacement, which holds the bits of its window: those below are zero or not
+/// demanded, those above are its extension.
+Value *RewritePlans::adapt(revng::IRBuilder &Builder,
+                           Value *V,
+                           unsigned Offset,
+                           unsigned Width) {
+  using namespace PatternMatch;
+
+  // A mask keeping every bit of the window is transparent to it
+  Value *Masked = nullptr;
+  const APInt *Mask = nullptr;
+  if (Offset != 0 and match(V, m_And(m_Value(Masked), m_APInt(Mask)))
+      and Offset + Width <= Mask->getBitWidth()
+      and Mask->extractBits(Width, Offset).isAllOnes()) {
+    return adapt(Builder, Masked, Offset, Width);
+  }
+
   bool Signed = false;
+  unsigned Start = 0;
   if (auto *I = dyn_cast<Instruction>(V)) {
     if (const RewritePlan *Plan = find(I)) {
       // Planning in reverse post-order rebuilds every operand before the
-      // instruction using it, and PHIs are only completed at the end.
+      // instruction using it, except across the back edges of PHIs.
       V = Replacements.lookup(I);
       revng_assert(V != nullptr);
 
-      if (auto *Integer = Plan->getIntegerRewrite())
+      if (auto *Integer = Plan->getIntegerRewrite()) {
         Signed = Integer->ResultExtension == ExtensionKind::Sign;
+        Start = Integer->Offset;
+      }
     }
   }
-  return Builder.CreateIntCast(V, Builder.getIntNTy(Width), Signed);
+
+  // Below the replacement, the bits are zero: shift it up
+  auto *Type = Builder.getIntNTy(Width);
+  if (Offset < Start) {
+    unsigned Shift = Start - Offset;
+    if (Shift >= Width)
+      return ConstantInt::get(Type, 0);
+    return Builder.CreateShl(Builder.CreateIntCast(V, Type, Signed), Shift);
+  }
+
+  // Above it, shift it down: past its top, its bits are its extension
+  return extractBits(Builder, V, Offset - Start, Width, Signed);
 }
 
 /// Adapt \p V at the end of \p Predecessor, where its edge to a PHI is taken.
@@ -181,12 +331,14 @@ RewritePlans::adapt(revng::IRBuilder &Builder, Value *V, unsigned Width) {
 /// on every edge from the same predecessor.
 Value *RewritePlans::adaptOnEdge(BasicBlock *Predecessor,
                                  Value *V,
+                                 unsigned Offset,
                                  unsigned Width,
                                  const DebugLoc &Location) {
-  auto [It, Inserted] = EdgeValues.try_emplace({ Predecessor, V, Width });
+  EdgeValueKey Key{ Predecessor, V, { Offset, Width } };
+  auto [It, Inserted] = EdgeValues.try_emplace(Key);
   if (Inserted) {
     revng::IRBuilder Builder(Predecessor->getTerminator(), Location);
-    It->second = adapt(Builder, V, Width);
+    It->second = adapt(Builder, V, Offset, Width);
   }
   return It->second;
 }
@@ -208,11 +360,13 @@ public:
     if (auto *Integer = Plan->getIntegerRewrite()) {
       bool Signed = Integer->ResultExtension == ExtensionKind::Sign;
       StringRef Extension = Signed ? "sign" : "zero";
+      Stream << "  ; Offset: " << Integer->Offset << "\n";
       Stream << "  ; Result width: " << Integer->ResultWidth << "\n";
       Stream << "  ; Computation width: " << Integer->ComputationWidth << "\n";
       Stream << "  ; Result extension: " << Extension << "\n";
     } else {
       const auto &Compare = *Plan->getComparisonRewrite();
+      Stream << "  ; Offset: " << Compare.Offset << "\n";
       Stream << "  ; Operand width: " << Compare.OperandWidth << "\n";
       Stream << "  ; Predicate: "
              << CmpInst::getPredicateName(Compare.Predicate) << "\n";

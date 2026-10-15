@@ -381,11 +381,12 @@ define i8 @unused_calls(i64 %x) {
 
 ; `and` with 0 demands no bit of %u, but %u is still rebuilt, so that it drops
 ; its nsw flag. Kept as it is, it would receive %p narrowed to the 8 bits %low
-; demands, and shift out bits that disagree with its sign bit.
+; demands, and shift out bits that disagree with its sign bit. Rebuilt, it
+; shifts every bit of its 8-bit window out, and is zero.
 define i8 @zero_demand_flags(i64 %x, i64 %y, ptr %out) {
   ; RAW-LABEL: @zero_demand_flags(
   ; RAW-NOT: nsw
-  ; RAW: shl i64 %{{[^ ]+}}, 56
+  ; RAW: store i64 0
   ; RAW-NOT: nsw
   ; RAW: ret i8
   %p = add i64 %x, %y
@@ -396,11 +397,12 @@ define i8 @zero_demand_flags(i64 %x, i64 %y, ptr %out) {
   ret i8 %low
 }
 
-; Execution needs both the demanded bits and those shifted into them. The
-; exact flag must not migrate to the narrowed computation.
+; The shift reads the bits of %x from bit 8. The exact flag must not migrate to
+; the narrowed computation.
 define i8 @exact_shift(i64 %x) {
   ; CHECK-LABEL: @exact_shift(
-  ; CHECK: lshr i16 {{.*}}, 8
+  ; CHECK: %[[H:[^ ]+]] = lshr i64 %x, 8
+  ; CHECK-NEXT: trunc i64 %[[H]] to i8
   %r = lshr exact i64 %x, 8
   %low = trunc i64 %r to i8
   ret i8 %low

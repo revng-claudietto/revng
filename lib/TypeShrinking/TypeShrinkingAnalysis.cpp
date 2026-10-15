@@ -46,7 +46,8 @@ TypeShrinkingAnalysisPass::run(Function &F, FunctionAnalysisManager &) {
     return Ranges.range(U.get());
   });
 
-  Planner Planner(Ranges, Demands);
+  const DataLayout &Layout = F.getParent()->getDataLayout();
+  Planner Planner(Ranges, Demands, Layout, AC, DT, Result);
 
   // Planning finishes before rebuilding invalidates the analyses it reads
   ReversePostOrderTraversal<Function *> Blocks(&F);

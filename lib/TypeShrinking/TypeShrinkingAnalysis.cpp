@@ -13,6 +13,7 @@
 
 #include "revng/TypeShrinking/TypeShrinkingAnalysis.h"
 
+#include "Planner.h"
 #include "SCCPValueRanges.h"
 
 using namespace llvm;
@@ -45,36 +46,13 @@ TypeShrinkingAnalysisPass::run(Function &F, FunctionAnalysisManager &) {
     return Ranges.range(U.get());
   });
 
-  // Retain a low-bit prefix covering LLVM's demanded mask. Range queries
-  // finish before rebuilding invalidates either analysis.
+  Planner Planner(Ranges, Demands);
+
+  // Planning finishes before rebuilding invalidates the analyses it reads
   ReversePostOrderTraversal<Function *> Blocks(&F);
   for (BasicBlock *Block : Blocks) {
     for (Instruction &I : *Block) {
-      if (not I.getType()->isIntegerTy() or Demands.isInstructionDead(&I))
-        continue;
-
-      unsigned Demand = Demands.getDemandedBits(&I).getActiveBits();
-
-      // This pass leaves dead code for DCE, but a dead instruction still
-      // executes, and demand analysis attributes nothing to it. Narrowing an
-      // operand it reads could therefore change what it computes:
-      //
-      //     %d = or i64 %x, 256       ; never zero, bit 8 is always set
-      //     %unused = udiv i64 42, %d ; dead, but defined for every %x
-      //     %r = trunc i64 %d to i8   ; the only live use wants 8 bits
-      //
-      // Narrowing %d to the 8 demanded bits drops bit 8 and leaves %unused
-      // dividing by zero. Count a dead user as reading every bit, which keeps
-      // such an operand wide. Narrowing driven by \ref SCCPValueRanges stays
-      // available, as bounds hold for the value a dead user reads too.
-      for (User *U : I.users()) {
-        if (Demands.isInstructionDead(cast<Instruction>(U))) {
-          Demand = I.getType()->getIntegerBitWidth();
-          break;
-        }
-      }
-
-      if (auto Plan = RewritePlan::create(I, Demand, Ranges))
+      if (RewritePlan Plan = Planner.plan(I))
         Result.insert(I, Plan);
     }
   }

@@ -21,6 +21,9 @@ class IRBuilder;
 
 namespace TypeShrinking {
 
+/// Return the integer width, or zero for a non-integer value.
+unsigned width(const llvm::Value *V);
+
 enum class ExtensionKind {
   Zero,
   Sign
@@ -67,79 +70,17 @@ struct ComparisonRewrite {
   llvm::CmpInst::Predicate Predicate = {};
 };
 
-class SCCPValueRanges;
-
 /// A plan to rebuild either an integer result or a comparison, or no plan at
 /// all. An empty plan converts to false and leaves its instruction alone.
 class RewritePlan {
 private:
   std::variant<std::monostate, IntegerRewrite, ComparisonRewrite> Plan;
 
-private:
-  explicit RewritePlan(IntegerRewrite Integer) : Plan(Integer) {}
-  explicit RewritePlan(ComparisonRewrite Comparison) : Plan(Comparison) {}
-
 public:
   /// An empty plan, rebuilding nothing.
   RewritePlan() = default;
-
-public:
-  /// Select a representation preserving the low \p Demand bits of I's result.
-  /// Return an empty plan when I's opcode is unsupported. A \p Demand of zero
-  /// still gets a plan, so that its computation is rebuilt without flags.
-  ///
-  /// For example, with the default minimum width of 8:
-  ///
-  /// before:
-  ///
-  ///     %wide = zext i16 %x to i64
-  ///     %shifted = lshr i64 %wide, 8
-  ///     ret i64 %shifted
-  ///
-  /// after:
-  ///
-  ///     %1 = lshr i16 %x, 8
-  ///     %2 = trunc i16 %1 to i8
-  ///     %3 = zext i8 %2 to i64
-  ///     ret i64 %3
-  ///
-  /// The return demands all 64 bits of %shifted. Assuming \p Ranges bounds it
-  /// to [0, 256), its plan is ResultWidth = 8, ResultExtension = Zero and
-  /// ComputationWidth = 16. %wide is planned too, with an i16 result, which
-  /// its i16 operand already satisfies, so nothing is emitted for it.
-  ///
-  /// \p Ranges can make the result narrower than \p Demand. Assuming it bounds
-  /// %r to [0, 256), ResultWidth is 8 even though the return demands 64 bits:
-  ///
-  /// before:
-  ///
-  ///     %r = and i64 %x, 255
-  ///     ret i64 %r
-  ///
-  /// after:
-  ///
-  ///     %1 = trunc i64 %x to i8
-  ///     %2 = and i8 %1, -1
-  ///     %3 = zext i8 %2 to i64
-  ///     ret i64 %3
-  ///
-  /// Opcode requirements can make ComputationWidth wider than ResultWidth.
-  /// Assuming \p Ranges again bounds %r to [0, 256), ResultWidth is 8, but
-  /// reaching bit 56 keeps the shift itself at i64:
-  ///
-  /// before:
-  ///
-  ///     %r = lshr i64 %x, 56
-  ///     ret i64 %r
-  ///
-  /// after:
-  ///
-  ///     %1 = lshr i64 %x, 56
-  ///     %2 = trunc i64 %1 to i8
-  ///     %3 = zext i8 %2 to i64
-  ///     ret i64 %3
-  static RewritePlan
-  create(llvm::Instruction &I, unsigned Demand, const SCCPValueRanges &Ranges);
+  explicit RewritePlan(IntegerRewrite Integer) : Plan(Integer) {}
+  explicit RewritePlan(ComparisonRewrite Comparison) : Plan(Comparison) {}
 
 public:
   /// Whether this plan rebuilds anything.

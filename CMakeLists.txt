@@ -261,9 +261,11 @@ foreach(
   # `XMM/ZMM_D(i)`). `fix-helpers` can only rewrite the per-lane CSV accesses
   # once those loops are unrolled. This step is not needed on other archs, so we
   # avoid it to save space on the generated libtcg helpers and build time.
+  # `simplifycfg` then drops the dead exits left by unrolling, along with their
+  # `phi`s.
   set(EXTRA_HELPER_PASSES "")
   if(ARCH STREQUAL "x86_64" OR ARCH STREQUAL "i386")
-    set(EXTRA_HELPER_PASSES -loop-unroll)
+    set(EXTRA_HELPER_PASSES -loop-unroll -simplifycfg)
   endif()
 
   add_custom_command(

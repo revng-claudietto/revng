@@ -252,7 +252,7 @@ define void @helper_divb_AL(ptr noundef %0, i64 noundef %1) section "revng_inlin
   %6 = trunc i64 %1 to i32
   %7 = and i32 %6, 255
   %8 = icmp eq i32 %7, 0
-  br i1 %8, label %9, label %12
+  br i1 %8, label %9, label %11
 
 9:
 ```

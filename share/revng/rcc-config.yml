@@ -113,6 +113,13 @@ read_passes:
         must_be_followed_by: remove-extractvalues
       - pass: instcombine-noarrays
         must_be_followed_by: remove-extractvalues
+      # instcombine can widen types again.
+      - pass: instcombine
+        must_be_followed_by: early-type-shrinking
+      - pass: instcombine-noarrays
+        must_be_followed_by: early-type-shrinking
+      - pass: early-type-shrinking
+        must_be_followed_by: type-shrinking
   - type: BashPass
   - # This is hardcoded to act on file tagged as "c"
     type: CPPCheckPass

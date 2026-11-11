@@ -350,6 +350,9 @@ branches:
             - instrument-stack-accesses
             - instcombine
             - remove-extractvalues
+            # We need to re-run type shrinking after instcombine.
+            - early-type-shrinking
+            - type-shrinking
             - loop-rotate
             - loop-simplify
             - compute-stack-accesses-bounds

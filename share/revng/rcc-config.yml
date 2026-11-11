@@ -104,6 +104,15 @@ read_passes:
     # any `RUN:` line, run:
     #     grep -L RUN: $(find tests/filecheck -type f)
     match_files_containing: "RUN:"
+  - type: PureLLVMPassesOrderPass
+    pipeline: python/revng/internal/pipeline.yml
+    requirements:
+      # instcombine can introduce `extractvalue`s, for instance on the result of
+      # `.with.overflow` intrinsics: make them opaque before the pipe ends.
+      - pass: instcombine
+        must_be_followed_by: remove-extractvalues
+      - pass: instcombine-noarrays
+        must_be_followed_by: remove-extractvalues
   - type: BashPass
   - # This is hardcoded to act on file tagged as "c"
     type: CPPCheckPass

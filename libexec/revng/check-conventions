@@ -506,6 +506,61 @@ class FileListPass(TaggedPass):
         )
 
 
+class PureLLVMPassesOrderPass(TaggedPass):
+    """Checks the order of the LLVM passes run by `pure-llvm-passes-pipe`.
+
+    Each entry of `requirements` has the form `{pass: A, must_be_followed_by:
+    B}`: in every list of passes that `pipeline` hands to
+    `pure-llvm-passes-pipe`, each occurrence of `A` has to be followed, later in
+    the same list, by `B`."""
+
+    pipe = "pure-llvm-passes-pipe"
+
+    def __init__(self, pipeline: str, requirements: List[Dict[str, str]]):
+        super().__init__("pure-llvm-passes-order", "all")
+        self.pipeline = Path(pipeline)
+        self.requirements = requirements
+
+    @staticmethod
+    def entries(node: Optional[yaml.Node]) -> Dict[str, yaml.Node]:
+        if not isinstance(node, yaml.MappingNode):
+            return {}
+        return {key.value: value for key, value in node.value}
+
+    def pass_lists(self, node: yaml.Node) -> Iterable[List[yaml.Node]]:
+        children: List[yaml.Node] = []
+        if isinstance(node, yaml.SequenceNode):
+            children = node.value
+        elif isinstance(node, yaml.MappingNode):
+            entries = self.entries(node)
+            pipe = entries.get("pipe")
+            if isinstance(pipe, yaml.ScalarNode) and pipe.value == self.pipe:
+                passes = self.entries(entries.get("configuration")).get("passes")
+                if isinstance(passes, yaml.SequenceNode):
+                    yield passes.value
+            children = list(entries.values())
+
+        for child in children:
+            yield from self.pass_lists(child)
+
+    async def process(self, files: Dict[Path, str], args: Dict[str, str | bool]) -> PassResult:
+        if self.pipeline not in files:
+            return PassResult("", True)
+
+        violations: Dict[str, Dict[Path, List[int]]] = {}
+        for passes in self.pass_lists(yaml.compose(files[self.pipeline])):
+            names = [pass_.value for pass_ in passes]
+            for index, pass_ in enumerate(passes):
+                for requirement in self.requirements:
+                    follower = requirement["must_be_followed_by"]
+                    if pass_.value == requirement["pass"] and follower not in names[index + 1 :]:
+                        message = f"In {self.pipe}, {pass_.value} must be followed by {follower}:"
+                        lines = violations.setdefault(message, {}).setdefault(self.pipeline, [])
+                        lines.append(pass_.start_mark.line + 1)
+
+        return PassResult.make_from(lines=violations)
+
+
 class BashPass(SingleCommandPass):
     def __init__(self):
         super().__init__("bash-check", "bash", ("shellcheck",))

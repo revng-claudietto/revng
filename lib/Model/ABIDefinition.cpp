@@ -5,6 +5,8 @@
 #include <span>
 #include <unordered_map>
 
+#include "llvm/Support/MathExtras.h"
+
 #include "revng/ADT/Concepts.h"
 #include "revng/Model/ABI.h"
 #include "revng/Model/ABI/Definition.h"
@@ -234,7 +236,38 @@ bool Definition::isPreliminarilyCompatibleWith(const RFT &Function) const {
     if (!model::Register::isUsedInArchitecture(Register, Architecture))
       return false;
 
+  // The function must leave the stack as the ABI does, e.g., a callee popping
+  // its arguments is not compatible with an ABI where the caller does it.
+  // Zero means unknown.
+  uint64_t StackArgumentsSize = 0;
+  if (const model::StructDefinition *Stack = Function.stackArgumentsType())
+    StackArgumentsSize = Stack->Size();
+  uint64_t FinalStackOffset = Function.FinalStackOffset();
+  if (FinalStackOffset != 0
+      and FinalStackOffset != finalStackOffset(StackArgumentsSize)) {
+    return false;
+  }
+
   return true;
+}
+
+uint64_t Definition::finalStackOffset(uint64_t StackArgumentsSize) const {
+  const auto Architecture = model::ABI::getArchitecture(ABI());
+  uint64_t Result = model::Architecture::getCallPushSize(Architecture);
+
+  if (CalleeIsResponsibleForStackCleanup()) {
+    Result += StackArgumentsSize;
+
+    // TODO: take return values into the account.
+
+    // TODO: take shadow space into the account if relevant.
+
+    revng_assert(llvm::isPowerOf2_64(StackAlignment()));
+    Result += StackAlignment() - 1;
+    Result &= ~(StackAlignment() - 1);
+  }
+
+  return Result;
 }
 
 static std::string translateABIName(model::ABI::Values ABI) {

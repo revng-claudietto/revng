@@ -64,8 +64,6 @@ public:
                                         bool HasReturnValueLocation) const;
 
 public:
-  uint64_t finalStackOffset(uint64_t SizeOfArgumentsOnStack) const;
-
   uint64_t
   combinedStackArgumentSize(const model::CABIFunctionDefinition &) const;
 };
@@ -284,7 +282,7 @@ ToRawConverter::convert(const model::CABIFunctionDefinition &FunctionType,
   }
 
   // Set the final stack offset
-  NewPrototype.FinalStackOffset() = finalStackOffset(StackStructSize);
+  NewPrototype.FinalStackOffset() = ABI.finalStackOffset(StackStructSize);
 
   // Populate the list of preserved registers
   for (auto Inserter = NewPrototype.PreservedRegisters().batch_insert();
@@ -303,26 +301,6 @@ ToRawConverter::convert(const model::CABIFunctionDefinition &FunctionType,
   Binary->TypeDefinitions().erase(FunctionType.key());
 
   return std::move(NewType);
-}
-
-uint64_t
-ToRawConverter::finalStackOffset(uint64_t SizeOfArgumentsOnStack) const {
-  const auto Architecture = model::ABI::getArchitecture(ABI.ABI());
-  uint64_t Result = model::Architecture::getCallPushSize(Architecture);
-
-  if (ABI.CalleeIsResponsibleForStackCleanup()) {
-    Result += SizeOfArgumentsOnStack;
-
-    // TODO: take return values into the account.
-
-    // TODO: take shadow space into the account if relevant.
-
-    revng_assert(llvm::isPowerOf2_64(ABI.StackAlignment()));
-    Result += ABI.StackAlignment() - 1;
-    Result &= ~(ABI.StackAlignment() - 1);
-  }
-
-  return Result;
 }
 
 using TRC = ToRawConverter;
@@ -512,7 +490,7 @@ Layout::Layout(const model::CABIFunctionDefinition &Function) :
   CalleeSavedRegisters.resize(ABI.CalleeSavedRegisters().size());
   llvm::copy(ABI.CalleeSavedRegisters(), CalleeSavedRegisters.begin());
 
-  FinalStackOffset = Converter.finalStackOffset(StackStructSize);
+  FinalStackOffset = ABI.finalStackOffset(StackStructSize);
 
   revng_log(LayoutLog,
             "Layout of " + toString(Function.key()) + " is:\n"
@@ -805,9 +783,9 @@ uint64_t finalStackOffset(const model::CABIFunctionDefinition &Function) {
   const abi::Definition &ABI = abi::Definition::get(Function.ABI());
   ToRawConverter Helper(ABI);
 
-  return Helper.finalStackOffset(ABI.CalleeIsResponsibleForStackCleanup() ?
-                                   Helper.combinedStackArgumentSize(Function) :
-                                   0);
+  return ABI.finalStackOffset(ABI.CalleeIsResponsibleForStackCleanup() ?
+                                Helper.combinedStackArgumentSize(Function) :
+                                0);
 }
 
 UsedRegisters usedRegisters(const model::CABIFunctionDefinition &Function) {

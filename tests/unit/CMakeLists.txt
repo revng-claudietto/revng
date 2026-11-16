@@ -355,6 +355,25 @@ revng_add_test(NAME test_alignment COMMAND test_alignment)
 set_tests_properties(test_alignment PROPERTIES LABELS "unit;abi;alignment")
 
 #
+# test_convert_to_cabi
+#
+
+revng_add_test_executable(test_convert_to_cabi "${SRC}/ConvertToCABI.cpp")
+target_compile_definitions(test_convert_to_cabi PRIVATE "BOOST_TEST_DYN_LINK=1")
+target_include_directories(test_convert_to_cabi PRIVATE "${CMAKE_SOURCE_DIR}")
+target_link_libraries(
+  test_convert_to_cabi
+  revngABI
+  revngModel
+  revngSupport
+  revngUnitTestHelpers
+  Boost::unit_test_framework
+  ${LLVM_LIBRARIES})
+revng_add_test(NAME test_convert_to_cabi COMMAND test_convert_to_cabi)
+set_tests_properties(test_convert_to_cabi PROPERTIES LABELS
+                                                     "unit;abi;conversion")
+
+#
 # test_type_bucket
 #
 

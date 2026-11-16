@@ -60,6 +60,12 @@ public:
   bool
   isPreliminarilyCompatibleWith(const model::RawFunctionDefinition &RFT) const;
 
+  /// Computes how many bytes above its entry value a function leaves the stack
+  /// pointer when it returns
+  ///
+  /// \param StackArgumentsSize The size of the arguments passed on the stack
+  uint64_t finalStackOffset(uint64_t StackArgumentsSize) const;
+
   struct AlignmentInfo {
     uint64_t Value;
     bool IsNatural;
